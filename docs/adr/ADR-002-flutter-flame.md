@@ -1,6 +1,6 @@
 # ADR-002: Flutter desktop + Flame
 
-**Статус:** Flutter — ACCEPTED (M01); Flame — PROPOSED до бенчмарка во входе M03.
+**Статус:** Flutter — ACCEPTED (M01); Flame — ACCEPTED (M03, замер в `docs/M03_SCENE_REPORT.md`, см. ADR-009).
 
 ## Решение
 - Desktop-клиент: Flutter 3.47.7 / Dart 3.13.5, платформы linux + windows, пакет `apps/desktop`.

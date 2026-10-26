@@ -4,7 +4,7 @@
 Изометрическая сцена с редактируемыми комнатами и предметами. Графика в нативном клиенте, Core хранит только сериализованные данные сцены. Flutter+Flame; Tiled подходит для authoring исходных карт, но итоговый встроенный редактор — свой.
 
 ## Схема
-Home → Rooms → Layers → VisualObjects. `VisualObject` имеет `id`, `assetId`, `roomId`, `transform{x,y,z,scale,rotation}`, `sortAnchor`, `hitArea`, `deviceBinding{entityId,role}`, visual props, local overrides, schemaVersion. Никаких токенов/IP или executable scripts в scene JSON.
+Home → Rooms → Layers → VisualObjects. Актуальная схема — **`docs/SCENE_FORMAT.md` / `contracts/scene.schema.json` v1** (M03): объект сцены имеет `id`, `roomId`, `assetId`, `position{x,y,z}`, `rotation`, `scale`, `layer`, `entityBinding{entityId,role}`, `visualState` (только демо), `metadata`; порядок отрисовки и область выбора вычисляются из геометрии, а не хранятся (прежние `deviceBinding`, `sortAnchor`, `hitArea` не используются). Никаких токенов/IP или executable scripts в scene JSON.
 
 ## Рендер
 - Камера pan/zoom, изометрическая проекция, корректный z-order и occlusion.
@@ -22,6 +22,9 @@ Home → Rooms → Layers → VisualObjects. `VisualObject` имеет `id`, `as
 
 ## Flutter ↔ mobile
 Общий JSON scene schema + assets/IDs. На iOS/Android отдельные рендереры либо совместимый общий движок **только после spike** по производительности и стоимости поддержки. Не утверждать, что SwiftUI/Compose нативно рендерят Flame.
+
+## Статус
+M03 (просмотр) — готово: сцена, камера, выбор, привязки, хранение в Core, офлайн-кэш. Для M04 подготовлены чистые операции `SceneEdits` (комнаты: добавить/удалить/размер/перенос; объекты: добавить/удалить/переместить/повернуть/масштаб/слой/привязать) с валидацией, `PUT /scenes/{id}` с revision и история 20 ревизий. UI редактирования в M03 нет.
 
 ## MVP порядок
 1. одна статичная изометрическая комната (3–5 объектов), hit tests; 2. Camera; 3. Bind Registry; 4. Undo/redo; 5. Save/load; 6. Multiple rooms; 7. import assets/LOD.

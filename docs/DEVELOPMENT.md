@@ -58,6 +58,22 @@ AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token AER_SCREEN
 ```
 Без `AER_CORE_URL` тест пропускается. Все создаваемые объекты помечены «(тест)».
 
+## Сцена (M03): живая проверка и замеры
+```bash
+D=$(mktemp -d); mkdir -p $D/shots $D/desktop
+AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 core/bin/aer-core &
+cd apps/desktop
+# скриншоты всех экранов против реального Core (объекты Registry «(тест)»)
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token \
+  AER_DESKTOP_DATA_DIR=$D/desktop AER_SCREENSHOT_DIR=$D/shots \
+  flutter test integration_test/scene_live_test.dart -d linux
+# то же после остановки Core: AER_EXPECT_OFFLINE=1 (проверка офлайн-кэша)
+# FPS/кадры (profile):
+AER_WINDOW_SIZE=1920x1080 flutter drive --profile --driver=test_driver/integration_test.dart \
+  --target=integration_test/scene_perf_test.dart -d linux   # → build/integration_response_data.json
+```
+Переменные клиента: `AER_DESKTOP_DATA_DIR` — каталог офлайн-кэша сцены; `AER_WINDOW_SIZE=WxH` — начальный размер окна (Linux); `AER_SCENE_FPS_LOG=1` — печать кадров сцены в секунду.
+
 ## Изолированный запуск (не трогая реальные данные)
 ```bash
 D=$(mktemp -d)

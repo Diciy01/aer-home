@@ -33,6 +33,9 @@ Flutter Desktop (Windows/Linux)      SwiftUI iOS / Kotlin Android
 - Remote реализует session negotiation, capability checks, а не собственный codec.
 - Bots принимает health/heartbeat/task statuses и log references.
 
+## Сцена (M03)
+Core хранит документ сцены (`/api/v1/scenes`, таблицы `scene_*`), клиент рендерит: Flame + кэшированная векторная картинка и текстура; камера, выбор и оверлеи — независимые части клиента. Связь с Registry — только UUID `entityBinding` и Registry API. Подробно: `docs/SCENE_FORMAT.md`, ADR-009.
+
 ## Данные
 SQLite WAL на этапе MVP; миграции идемпотентные и тестируемые; журнал действий хранится отдельно логически; secrets через OS vault/зашифрованное хранилище, не в сценах/JSON. Опциональный PostgreSQL только при фактической необходимости. Раздельные таблицы/DAO по владельцу модуля, без прямого доступа других модулей к ним.
 
