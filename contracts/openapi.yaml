@@ -1,41 +1,75 @@
 openapi: 3.1.0
 info:
-  title: AER HOME Core API (draft)
-  version: 0.1.0
+  title: AER HOME Core API
+  version: 0.2.0
   description: >
-    Draft contract for architectural discussion. Not an implemented API.
+    Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
+    served by aer-core and checked by core/internal/core/contract_test.go; `planned`
+    operations are drafts for later milestones and may change.
+    Every response uses the envelope from ADR-007: `{data, meta}` on success,
+    `{error, meta}` on failure.
+    Changelog: 0.2.0 — response envelope, error model, public /health, /system/info (M01).
 servers:
-  - url: https://aer-home.local/api/v1
+  - url: http://127.0.0.1:8787/api/v1
+    description: Local development Core (loopback only)
 security:
   - bearerAuth: []
 paths:
   /health:
     get:
-      summary: Core readiness (authenticated by default)
+      x-aer-status: implemented
+      summary: Core liveness and storage readiness
+      description: >
+        Public so clients can tell "Core offline" from "token rejected".
+        Returns no identifiers or data. `degraded` means the database did not answer.
+      security: []
       responses:
         '200':
-          description: Healthy
+          description: Core is serving requests
           content:
             application/json:
               schema:
-                type: object
-                required: [status, timestamp]
-                properties:
-                  status: { type: string, enum: [ok, degraded] }
-                  timestamp: { type: string, format: date-time }
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Health' }
+  /system/info:
+    get:
+      x-aer-status: implemented
+      summary: Core version, mode, schema versions and module states
+      responses:
+        '200':
+          description: System information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/SystemInfo' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /entities:
     get:
-      summary: List registered entities
+      x-aer-status: planned
+      summary: List registered entities (M02 Registry)
       responses:
         '200':
           description: Entity list
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/Entity' }
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Entity' }
     post:
-      summary: Register an entity
+      x-aer-status: planned
+      summary: Register an entity (M02 Registry)
       requestBody:
         required: true
         content:
@@ -46,10 +80,16 @@ paths:
           description: Created entity
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Entity' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Entity' }
   /entities/{entityId}:
     get:
-      summary: Read an entity
+      x-aer-status: planned
+      summary: Read an entity (M02 Registry)
       parameters:
         - { name: entityId, in: path, required: true, schema: { type: string, format: uuid } }
       responses:
@@ -57,34 +97,129 @@ paths:
           description: Entity
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/Entity' }
-        '404': { description: Not found }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Entity' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /rooms:
     get:
-      summary: List rooms
+      x-aer-status: planned
+      summary: List rooms (M03/M04 Scene)
       responses:
         '200':
           description: Rooms
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/Room' }
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Room' }
   /incidents:
     get:
-      summary: List incident summaries
+      x-aer-status: planned
+      summary: List incident summaries (M05 Monitoring)
       responses:
         '200':
           description: Incidents
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: '#/components/schemas/Incident' }
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: '#/components/schemas/Incident' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
+  responses:
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: Resource or endpoint not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   schemas:
+    Meta:
+      type: object
+      required: [requestId, apiVersion]
+      properties:
+        requestId: { type: string }
+        apiVersion: { type: string, const: v1 }
+    SuccessEnvelope:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    ErrorEnvelope:
+      type: object
+      required: [error, meta]
+      properties:
+        error: { $ref: '#/components/schemas/Error' }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          enum: [BAD_REQUEST, VALIDATION_FAILED, UNAUTHORIZED, FORBIDDEN, NOT_FOUND,
+                 METHOD_NOT_ALLOWED, CONFLICT, PAYLOAD_TOO_LARGE, UNSUPPORTED,
+                 PERMISSION_REQUIRED, UNAVAILABLE, INTERNAL]
+        message: { type: string, description: Human-readable; clients branch on code only }
+        details: { type: object }
+    Health:
+      type: object
+      required: [status, timestamp, apiVersion]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        timestamp: { type: string, format: date-time }
+        apiVersion: { type: string }
+    ModuleStatus:
+      type: object
+      required: [name, enabled]
+      properties:
+        name: { type: string }
+        enabled: { type: boolean }
+        error: { type: string, description: Set when an enabled module failed to start }
+    SystemInfo:
+      type: object
+      required: [coreVersion, apiVersion, mode, demo, instanceId, instanceCreatedAt,
+                 startedAt, uptimeSeconds, schema, modules]
+      properties:
+        coreVersion: { type: string }
+        apiVersion: { type: string }
+        mode: { type: string, enum: [development, local, server] }
+        demo: { type: boolean, description: True when demo data may be present; clients must label it }
+        instanceId: { type: string, format: uuid }
+        instanceCreatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        uptimeSeconds: { type: integer, minimum: 0 }
+        schema:
+          type: array
+          items:
+            type: object
+            required: [module, version]
+            properties:
+              module: { type: string }
+              version: { type: integer, minimum: 1 }
+        modules:
+          type: array
+          items: { $ref: '#/components/schemas/ModuleStatus' }
     NewEntity:
       type: object
       required: [name, type]
