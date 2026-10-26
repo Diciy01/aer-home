@@ -1,3 +1,5 @@
+import 'dart:async' as async;
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -82,6 +84,7 @@ class SceneGame extends FlameGame {
     _presentations = presentations;
     _picture?.dispose();
     _picture = const ScenePictureBuilder().build(layout, presentations);
+    _rasterize(layout);
     view.configure(bounds: layout.bounds.inflate(40));
     if (first || resetCamera) {
       userMovedCamera = false;
@@ -104,8 +107,16 @@ class SceneGame extends FlameGame {
   /// Resumes rendering for a short while (input, state change, animation).
   void wake() {
     _idle = 0;
+    _throttle?.cancel();
+    _throttle = null;
     if (paused) resumeEngine();
   }
+
+  async.Timer? _throttle;
+
+  /// Interval between frames when only status badges animate and nothing
+  /// else moves (~15 fps is enough for a slow pulse or spinner).
+  static const badgeFrameInterval = Duration(milliseconds: 66);
 
   @override
   void onGameResize(Vector2 size) {
@@ -123,21 +134,80 @@ class SceneGame extends FlameGame {
   void update(double dt) {
     super.update(dt);
     _time += dt;
-    final moving = view.tick(dt);
+    var moving = view.tick(dt);
     camera.viewfinder.position = Vector2(view.center.dx, view.center.dy);
     camera.viewfinder.zoom = view.zoom;
     if (view.center != _lastCenter || view.zoom != _lastZoom) {
       _lastCenter = view.center;
       _lastZoom = view.zoom;
+      _lastMoveAt = _time;
       _announceViewChange();
+      // Input-driven pan/zoom counts as activity too, not only flights.
+      moving = true;
     }
-    if (moving || _hasAnimatedBadges) {
+    if (moving) {
       _idle = 0;
-    } else {
-      _idle += dt;
-      if (_idle > 0.3) pauseEngine();
+      return;
+    }
+    _idle += dt;
+    if (_idle <= 0.3) return;
+    pauseEngine();
+    if (_hasAnimatedBadges) {
+      // Throttled animation: render one frame, sleep, repeat.
+      _throttle = async.Timer(badgeFrameInterval, () {
+        _throttle = null;
+        if (paused) resumeEngine();
+      });
     }
   }
+
+  // --- Raster cache -------------------------------------------------------
+  // Impeller re-rasterises vector pictures every frame. While the camera
+  // moves, the house is drawn from a texture rendered once per scene state;
+  // when it settles at a zoom above the texture's resolution, one crisp
+  // vector frame is drawn instead.
+
+  /// Longest side of the cached texture (≈ 24 MB RGBA at 3072×1950).
+  static const maxCacheSide = 3072.0;
+
+  ui.Image? _cache;
+  Rect _cacheRect = Rect.zero;
+  double _cacheScale = 0;
+  double _lastMoveAt = -1;
+
+  double get _dpr =>
+      ui.PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1;
+
+  void _rasterize(SceneLayout layout) {
+    final pic = _picture;
+    if (pic == null) return;
+    final rect = layout.bounds.inflate(8);
+    final scale = math.min(
+      math.min(maxCacheSide / rect.width, maxCacheSide / rect.height),
+      2 * _dpr,
+    );
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder)
+      ..scale(scale)
+      ..translate(-rect.left, -rect.top)
+      ..drawPicture(pic);
+    final scaled = recorder.endRecording();
+    final image = scaled.toImageSync(
+      (rect.width * scale).ceil(),
+      (rect.height * scale).ceil(),
+    );
+    scaled.dispose();
+    _cache?.dispose();
+    _cache = image;
+    _cacheRect = rect;
+    _cacheScale = scale;
+  }
+
+  bool get _moving => _time - _lastMoveAt < 0.15;
+
+  /// Whether this frame may use the texture instead of the vector picture.
+  bool get useRasterCache =>
+      _cache != null && (_moving || view.zoom * _dpr <= _cacheScale * 1.05);
 
   bool _announcePending = false;
 
@@ -154,14 +224,33 @@ class SceneGame extends FlameGame {
     SchedulerBinding.instance.ensureVisualUpdate();
   }
 
+  /// Diagnostics: AER_SCENE_FPS_LOG=1 prints scene repaints per second.
+  static final bool _fpsLog = Platform.environment['AER_SCENE_FPS_LOG'] == '1';
+  int _fpsFrames = 0;
+  final _fpsClock = Stopwatch()..start();
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
     framesRendered++;
+    if (_fpsLog) {
+      _fpsFrames++;
+      final elapsed = _fpsClock.elapsedMilliseconds / 1000;
+      if (elapsed >= 1) {
+        // ignore: avoid_print
+        print(
+          'scene fps=${(_fpsFrames / elapsed).toStringAsFixed(1)} cache=${useRasterCache ? 'texture' : 'vector'} zoom=${view.zoom.toStringAsFixed(2)}',
+        );
+        _fpsFrames = 0;
+        _fpsClock.reset();
+      }
+    }
   }
 
   @override
   void onRemove() {
+    _throttle?.cancel();
+    _cache?.dispose();
     _picture?.dispose();
     super.onRemove();
   }
@@ -171,8 +260,20 @@ class _StaticScene extends Component {
   _StaticScene(this.game);
   final SceneGame game;
 
+  final _paint = Paint()..filterQuality = FilterQuality.medium;
+
   @override
   void render(Canvas canvas) {
+    final img = game._cache;
+    if (img != null && game.useRasterCache) {
+      canvas.drawImageRect(
+        img,
+        Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+        game._cacheRect,
+        _paint,
+      );
+      return;
+    }
     final pic = game._picture;
     if (pic != null) canvas.drawPicture(pic);
   }

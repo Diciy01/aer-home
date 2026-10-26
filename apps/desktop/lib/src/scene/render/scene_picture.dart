@@ -60,20 +60,25 @@ class ScenePictureBuilder {
     return recorder.endRecording();
   }
 
+  /// One soft shadow under the whole house. Rooms are merged into a single
+  /// path (non-zero fill = union) so adjacent rooms leave no seams.
   void _groundShadow(Canvas canvas, SceneLayout layout) {
-    final paint = Paint()
-      ..color = const Color(0xFF5B4636).withValues(alpha: 0.16)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22);
+    final path = Path()..fillType = PathFillType.nonZero;
+    final z = -floorThickness - 0.4;
     for (final r in layout.rooms) {
-      final z = -floorThickness - 0.4;
-      final pts = [
+      path.addPolygon([
         Iso.project(r.x0 + 0.6, r.y0 + 0.6, z),
         Iso.project(r.x1 + 0.6, r.y0 + 0.6, z),
         Iso.project(r.x1 + 0.6, r.y1 + 0.6, z),
         Iso.project(r.x0 + 0.6, r.y1 + 0.6, z),
-      ];
-      canvas.drawPath(Path()..addPolygon(pts, true), paint);
+      ], true);
     }
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = const Color(0xFF5B4636).withValues(alpha: 0.16)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 22),
+    );
   }
 
   void _floor(Canvas canvas, RoomGeometry r) {
@@ -230,14 +235,15 @@ class ScenePictureBuilder {
     );
     final rx = radius * Iso.tileWidth / 2 * 1.4, ry = rx / 2;
     final rect = Rect.fromCenter(center: c, width: rx * 2, height: ry * 2);
+    // Normal blending only: advanced blend modes (softLight) produced
+    // streak artifacts on the GPU backend.
     canvas.drawOval(
       rect,
       Paint()
         ..shader = Gradient.radial(c, rx, [
-          const Color(0xFFFFE2AE).withValues(alpha: 0.42),
-          const Color(0xFFFFE2AE).withValues(alpha: 0.0),
-        ])
-        ..blendMode = BlendMode.softLight,
+          const Color(0xFFFFE6B8).withValues(alpha: 0.20),
+          const Color(0x00FFE6B8),
+        ]),
     );
     canvas.drawOval(
       rect,
