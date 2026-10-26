@@ -24,3 +24,6 @@ desktop.ini
 build/
 .flutter-plugins-dependencies
 *.iml
+
+# Private local notes (real home details) — never publish
+/docs/private/
