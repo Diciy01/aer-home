@@ -10,6 +10,8 @@ import 'package:aer_home_desktop/src/app.dart';
 import 'package:aer_home_desktop/src/core_api/core_client.dart';
 import 'package:aer_home_desktop/src/core_api/endpoint.dart';
 import 'package:aer_home_desktop/src/core_api/registry_api.dart';
+import 'package:aer_home_desktop/src/scene/repository/scene_repository.dart';
+import 'package:aer_home_desktop/src/scene/scene_controller.dart';
 import 'package:aer_home_desktop/src/state/app_section.dart';
 import 'package:aer_home_desktop/src/state/connection_controller.dart';
 import 'package:aer_home_desktop/src/state/registry_controller.dart';
@@ -58,12 +60,20 @@ void main() {
     );
     final connection = ConnectionController(client);
     final registry = RegistryController(HttpRegistryApi(client), connection);
+    final scene = SceneController(
+      sceneApi: HttpSceneApi(client),
+      registryApi: HttpRegistryApi(client),
+      connectionController: connection,
+      sceneCache: SceneCache.defaultLocation(),
+      bundledLoader: loadBundledDemo,
+    );
     await tester.pumpWidget(
       RepaintBoundary(
         key: _boundary,
         child: AerHomeApp(
           connection: connection,
           registry: registry,
+          scene: scene,
           section: AppSectionController(AppSection.devices),
         ),
       ),

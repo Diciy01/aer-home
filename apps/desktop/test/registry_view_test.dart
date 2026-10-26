@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 
 import 'fake_registry_api.dart';
 import 'fixtures.dart';
+import 'scene/scene_fixtures.dart';
 
 class Harness {
   Harness(this.api, this.connection, this.registry);
@@ -30,10 +31,13 @@ Future<Harness> pumpDevices(
     connection,
     searchDebounce: const Duration(milliseconds: 10),
   );
+  final scene = sceneControllerFor(connection: connection, registry: fake);
+  addTearDown(scene.dispose);
   await tester.pumpWidget(
     AerHomeApp(
       connection: connection,
       registry: registry,
+      scene: scene,
       section: AppSectionController(AppSection.devices),
     ),
   );
@@ -329,10 +333,12 @@ void main() {
       await tester.tap(find.byKey(const Key('relation-pick')));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.descendant(
-          of: find.byType(ListTile),
-          matching: find.text('Сервер'),
-        ).first,
+        find
+            .descendant(
+              of: find.byType(ListTile),
+              matching: find.text('Сервер'),
+            )
+            .first,
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('relation-save')));

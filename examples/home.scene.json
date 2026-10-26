@@ -306,7 +306,7 @@
         "w": 1.0,
         "d": 0.6
       },
-      "height": 0.35,
+      "height": 0.9,
       "art": {
         "kind": "procedural",
         "ref": "cozy/router",
@@ -915,11 +915,11 @@
       "assetId": "cozy/link_panel",
       "label": "Панель индикаторов",
       "position": {
-        "x": 4.8,
-        "y": 0.05,
+        "x": 0.05,
+        "y": 4.6,
         "z": 1.6
       },
-      "rotation": 0,
+      "rotation": 90,
       "scale": 1.0,
       "layer": "wall",
       "entityBinding": null,

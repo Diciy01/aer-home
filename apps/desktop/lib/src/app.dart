@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'scene/scene_controller.dart';
 import 'shell/app_shell.dart';
 import 'state/app_section.dart';
 import 'state/connection_controller.dart';
@@ -11,11 +12,13 @@ class AerHomeApp extends StatelessWidget {
     super.key,
     required this.connection,
     required this.registry,
+    required this.scene,
     required this.section,
   });
 
   final ConnectionController connection;
   final RegistryController registry;
+  final SceneController scene;
   final AppSectionController section;
 
   @override
@@ -27,6 +30,7 @@ class AerHomeApp extends StatelessWidget {
       home: AppShell(
         connection: connection,
         registry: registry,
+        scene: scene,
         section: section,
       ),
     );

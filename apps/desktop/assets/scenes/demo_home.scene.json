@@ -1,0 +1,1097 @@
+{
+  "schemaVersion": 1,
+  "sceneId": "03dbcb77-887b-55d7-afab-fc031089fcd0",
+  "name": "Мой дом (демо-планировка)",
+  "demo": true,
+  "projection": "isometric-2:1",
+  "assets": [
+    {
+      "id": "cozy/desk",
+      "label": "Рабочий стол",
+      "footprint": {
+        "w": 3.2,
+        "d": 1.6
+      },
+      "height": 1.5,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/desk",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/monitor",
+      "label": "Монитор",
+      "footprint": {
+        "w": 1.4,
+        "d": 0.4
+      },
+      "height": 1.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/monitor",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/desk_lamp",
+      "label": "Настольная лампа",
+      "footprint": {
+        "w": 0.5,
+        "d": 0.5
+      },
+      "height": 1.1,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/desk_lamp",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/pc_tower",
+      "label": "Системный блок",
+      "footprint": {
+        "w": 0.6,
+        "d": 1.2
+      },
+      "height": 1.2,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/pc_tower",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/office_chair",
+      "label": "Кресло",
+      "footprint": {
+        "w": 1.1,
+        "d": 1.1
+      },
+      "height": 2.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/office_chair",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/bookshelf",
+      "label": "Книжный шкаф",
+      "footprint": {
+        "w": 2.4,
+        "d": 0.8
+      },
+      "height": 3.6,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/bookshelf",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/plant",
+      "label": "Растение",
+      "footprint": {
+        "w": 0.9,
+        "d": 0.9
+      },
+      "height": 2.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/plant",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/rug",
+      "label": "Ковёр",
+      "footprint": {
+        "w": 4.0,
+        "d": 3.0
+      },
+      "height": 0.05,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/rug",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/server_rack",
+      "label": "Серверная стойка",
+      "footprint": {
+        "w": 1.6,
+        "d": 1.8
+      },
+      "height": 4.2,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/server_rack",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/shelf",
+      "label": "Стеллаж",
+      "footprint": {
+        "w": 2.6,
+        "d": 1.0
+      },
+      "height": 3.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/shelf",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/server_box",
+      "label": "Домашний сервер",
+      "footprint": {
+        "w": 1.0,
+        "d": 0.9
+      },
+      "height": 0.9,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/server_box",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/network_switch",
+      "label": "Коммутатор",
+      "footprint": {
+        "w": 1.4,
+        "d": 0.7
+      },
+      "height": 0.35,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/network_switch",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/crate",
+      "label": "Ящик для хранения",
+      "footprint": {
+        "w": 1.0,
+        "d": 0.8
+      },
+      "height": 0.8,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/crate",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/tv_stand",
+      "label": "Тумба",
+      "footprint": {
+        "w": 3.6,
+        "d": 1.2
+      },
+      "height": 1.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/tv_stand",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/tv",
+      "label": "Телевизор",
+      "footprint": {
+        "w": 3.0,
+        "d": 0.3
+      },
+      "height": 1.8,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/tv",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/tv_stick",
+      "label": "ТВ-приставка",
+      "footprint": {
+        "w": 0.4,
+        "d": 0.4
+      },
+      "height": 0.15,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/tv_stick",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/sofa",
+      "label": "Диван",
+      "footprint": {
+        "w": 4.2,
+        "d": 1.8
+      },
+      "height": 1.6,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/sofa",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/coffee_table",
+      "label": "Журнальный столик",
+      "footprint": {
+        "w": 2.2,
+        "d": 1.2
+      },
+      "height": 0.8,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/coffee_table",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/floor_lamp",
+      "label": "Торшер",
+      "footprint": {
+        "w": 0.8,
+        "d": 0.8
+      },
+      "height": 3.2,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/floor_lamp",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/network_cabinet",
+      "label": "Сетевой шкаф",
+      "footprint": {
+        "w": 1.8,
+        "d": 1.0
+      },
+      "height": 3.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/network_cabinet",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/side_table",
+      "label": "Столик",
+      "footprint": {
+        "w": 1.4,
+        "d": 1.0
+      },
+      "height": 1.3,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/side_table",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/router",
+      "label": "Роутер",
+      "footprint": {
+        "w": 1.0,
+        "d": 0.6
+      },
+      "height": 0.9,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/router",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/link_panel",
+      "label": "Панель индикаторов",
+      "footprint": {
+        "w": 2.0,
+        "d": 0.15
+      },
+      "height": 1.0,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/link_panel",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/bot_station",
+      "label": "Рабочая станция бота",
+      "footprint": {
+        "w": 2.2,
+        "d": 1.4
+      },
+      "height": 1.5,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/bot_station",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/bot",
+      "label": "Бот",
+      "footprint": {
+        "w": 0.8,
+        "d": 0.8
+      },
+      "height": 1.3,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/bot",
+        "status": "placeholder"
+      }
+    },
+    {
+      "id": "cozy/terminal",
+      "label": "Терминал",
+      "footprint": {
+        "w": 1.0,
+        "d": 1.0
+      },
+      "height": 2.2,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/terminal",
+        "status": "placeholder"
+      }
+    }
+  ],
+  "rooms": [
+    {
+      "id": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "name": "Кабинет",
+      "kind": "office",
+      "origin": {
+        "x": 0,
+        "y": 0
+      },
+      "size": {
+        "w": 10,
+        "d": 8
+      },
+      "wallHeight": 5.0,
+      "style": {
+        "floor": "oak",
+        "wall": "cream"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "name": "Гостиная",
+      "kind": "living",
+      "origin": {
+        "x": 10,
+        "y": 0
+      },
+      "size": {
+        "w": 12,
+        "d": 8
+      },
+      "wallHeight": 5.0,
+      "style": {
+        "floor": "oak_warm",
+        "wall": "milk"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "name": "Серверная",
+      "kind": "server",
+      "origin": {
+        "x": 22,
+        "y": 0
+      },
+      "size": {
+        "w": 7,
+        "d": 8
+      },
+      "wallHeight": 5.0,
+      "style": {
+        "floor": "tile",
+        "wall": "sand"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "47114833-4302-56db-9c8f-630552cf8c07",
+      "name": "Сетевая",
+      "kind": "network",
+      "origin": {
+        "x": 0,
+        "y": 8
+      },
+      "size": {
+        "w": 8,
+        "d": 7
+      },
+      "wallHeight": 5.0,
+      "style": {
+        "floor": "tile",
+        "wall": "beige"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "name": "Автоматизация",
+      "kind": "automation",
+      "origin": {
+        "x": 8,
+        "y": 8
+      },
+      "size": {
+        "w": 12,
+        "d": 7
+      },
+      "wallHeight": 5.0,
+      "style": {
+        "floor": "carpet",
+        "wall": "cream"
+      },
+      "metadata": {}
+    }
+  ],
+  "objects": [
+    {
+      "id": "1c59bfc9-7da4-57b9-a874-841eb021c50d",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/bookshelf",
+      "label": "Книжный шкаф",
+      "position": {
+        "x": 6.6,
+        "y": 0.2,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "fa293c16-9088-52d1-becd-43799f896d77",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/desk",
+      "label": "Рабочий стол",
+      "position": {
+        "x": 2.0,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "b35fedc1-0810-5e01-9a34-4ff590717af9",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/monitor",
+      "label": "Монитор",
+      "position": {
+        "x": 2.9,
+        "y": 0.5,
+        "z": 1.5
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "e3dd9819-9a6a-5f6b-b323-935927680c9b",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/desk_lamp",
+      "label": "Настольная лампа",
+      "position": {
+        "x": 4.5,
+        "y": 0.5,
+        "z": 1.5
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "ada38696-eade-503e-b231-9877f6322706",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/pc_tower",
+      "label": "Основной ПК",
+      "position": {
+        "x": 1.2,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "41f7ad3e-7cdd-5b97-a097-24fa079304e0",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/office_chair",
+      "label": "Кресло",
+      "position": {
+        "x": 3.1,
+        "y": 2.3,
+        "z": 0
+      },
+      "rotation": 180,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "53590b5f-f3f8-52f4-b0d6-dc158bfad3b5",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/plant",
+      "label": "Растение",
+      "position": {
+        "x": 0.2,
+        "y": 0.2,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "d7e99714-0d20-5152-a2fe-7d32dbccd239",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/rug",
+      "label": "Ковёр",
+      "position": {
+        "x": 2.4,
+        "y": 3.6,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "floor",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "db397d22-8fe5-5c85-bf75-feb821143ed3",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/tv_stand",
+      "label": "Тумба",
+      "position": {
+        "x": 4.2,
+        "y": 0.2,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "bab6b8a9-480b-5d1f-93a7-d96f9523af02",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/tv",
+      "label": "Телевизор",
+      "position": {
+        "x": 4.5,
+        "y": 0.4,
+        "z": 1.0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "offline"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "d154efac-a904-58bc-92bf-812494343801",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/tv_stick",
+      "label": "ТВ-приставка",
+      "position": {
+        "x": 4.4,
+        "y": 0.9,
+        "z": 1.0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "offline"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "f5b76dfe-362e-5cd2-abc5-9f2b90c6b641",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/rug",
+      "label": "Ковёр",
+      "position": {
+        "x": 4.0,
+        "y": 2.6,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "floor",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "fc652103-e91a-54ab-ab45-2a08ff3d4cd7",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/coffee_table",
+      "label": "Журнальный столик",
+      "position": {
+        "x": 4.9,
+        "y": 3.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "f1e2ada1-79d2-53cc-bcb6-812a3c395ce9",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/sofa",
+      "label": "Диван",
+      "position": {
+        "x": 3.9,
+        "y": 5.6,
+        "z": 0
+      },
+      "rotation": 180,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "d4dcc671-6297-516f-a2f1-e011f45a6832",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/floor_lamp",
+      "label": "Торшер",
+      "position": {
+        "x": 8.8,
+        "y": 5.8,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "2c11dbfb-c0f9-58ba-8c29-ba222ea9df4c",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/plant",
+      "label": "Растение",
+      "position": {
+        "x": 0.4,
+        "y": 0.4,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "9a536fe2-e9e2-5af0-9a71-00f8bcae4de9",
+      "roomId": "7f27e4aa-a27f-5c03-a202-a92be9549fc3",
+      "assetId": "cozy/plant",
+      "label": "Растение",
+      "position": {
+        "x": 10.8,
+        "y": 0.4,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "b10fbcf4-6d6a-5c7f-a440-3d19edcaf29b",
+      "roomId": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "assetId": "cozy/server_rack",
+      "label": "Серверная стойка",
+      "position": {
+        "x": 0.3,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "6ad1af42-935e-5bb2-aaa7-90f05a76ea76",
+      "roomId": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "assetId": "cozy/shelf",
+      "label": "Стеллаж",
+      "position": {
+        "x": 2.6,
+        "y": 0.2,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "2f2932ba-264e-5dc0-a55d-9e78f1b1b512",
+      "roomId": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "assetId": "cozy/server_box",
+      "label": "Домашний сервер",
+      "position": {
+        "x": 2.8,
+        "y": 0.25,
+        "z": 1.0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "warning"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "dc04a9c4-b9ab-5cce-8477-23c2a0d90fcc",
+      "roomId": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "assetId": "cozy/network_switch",
+      "label": "Коммутатор",
+      "position": {
+        "x": 3.7,
+        "y": 0.3,
+        "z": 2.0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "f8398942-27bb-5619-9dc2-c853bad7cd92",
+      "roomId": "8c31ff77-01a9-522c-86b8-3cc2986bdf0c",
+      "assetId": "cozy/crate",
+      "label": "Ящик",
+      "position": {
+        "x": 5.6,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "ee2115e0-8f29-5e04-8ce4-1a56a7529b83",
+      "roomId": "47114833-4302-56db-9c8f-630552cf8c07",
+      "assetId": "cozy/network_cabinet",
+      "label": "Сетевой шкаф",
+      "position": {
+        "x": 0.2,
+        "y": 1.0,
+        "z": 0
+      },
+      "rotation": 90,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "9dcc1b72-0332-5a73-bb9f-f5e2c7a54c2f",
+      "roomId": "47114833-4302-56db-9c8f-630552cf8c07",
+      "assetId": "cozy/side_table",
+      "label": "Столик",
+      "position": {
+        "x": 2.8,
+        "y": 0.2,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "a9199ead-2680-58df-bafc-518b0385691b",
+      "roomId": "47114833-4302-56db-9c8f-630552cf8c07",
+      "assetId": "cozy/router",
+      "label": "Роутер",
+      "position": {
+        "x": 3.0,
+        "y": 0.3,
+        "z": 1.3
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "7d9fbb95-78f9-541e-a126-477ac731330c",
+      "roomId": "47114833-4302-56db-9c8f-630552cf8c07",
+      "assetId": "cozy/link_panel",
+      "label": "Панель индикаторов",
+      "position": {
+        "x": 0.05,
+        "y": 4.6,
+        "z": 1.6
+      },
+      "rotation": 90,
+      "scale": 1.0,
+      "layer": "wall",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "unknown"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "b60a9b3e-e137-564e-a1a2-67d585efb13a",
+      "roomId": "47114833-4302-56db-9c8f-630552cf8c07",
+      "assetId": "cozy/plant",
+      "label": "Растение",
+      "position": {
+        "x": 6.7,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "4bafe81e-e3e9-5755-82a7-bfb8c08ded1a",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot_station",
+      "label": "Станция PICO",
+      "position": {
+        "x": 0.6,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "8ef534cf-c10b-5c85-b184-45662b89ee66",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot_station",
+      "label": "Станция Курьер",
+      "position": {
+        "x": 3.8,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "ae0e7753-e802-5136-9f08-bae060c709e9",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot_station",
+      "label": "Станция Отчёты",
+      "position": {
+        "x": 7.0,
+        "y": 0.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "8f39f012-c106-5b06-ae14-66de2f9e45f1",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot",
+      "label": "Бот PICO",
+      "position": {
+        "x": 1.3,
+        "y": 2.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "online"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "3f3b97b3-78e3-526f-b920-221f9346d1a3",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot",
+      "label": "Бот Курьер",
+      "position": {
+        "x": 4.5,
+        "y": 2.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "critical"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "e5ed0436-93db-5cc9-b9df-35cda6231520",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/bot",
+      "label": "Бот Отчёты",
+      "position": {
+        "x": 7.7,
+        "y": 2.3,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "loading"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "87db337a-28f3-5b46-8218-ffa8892eaa3a",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/terminal",
+      "label": "Терминал n8n",
+      "position": {
+        "x": 10.4,
+        "y": 0.4,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": {
+        "demo": "archived"
+      },
+      "metadata": {}
+    },
+    {
+      "id": "33af8e8d-1322-554b-b538-e8d278f1e922",
+      "roomId": "7b7d0105-30e1-5d18-ac53-11bd220bcab8",
+      "assetId": "cozy/plant",
+      "label": "Растение",
+      "position": {
+        "x": 10.6,
+        "y": 5.6,
+        "z": 0
+      },
+      "rotation": 0,
+      "scale": 1.0,
+      "layer": "object",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    }
+  ],
+  "metadata": {
+    "source": "AER HOME demo layout v1",
+    "note": "Демонстрационная планировка: состояния объектов — тестовые."
+  }
+}

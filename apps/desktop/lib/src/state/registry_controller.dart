@@ -169,6 +169,13 @@ class RegistryController extends ChangeNotifier {
     await _loadSelectionDetails();
   }
 
+  /// Loads an entity by id and selects it (used by the scene to open cards).
+  Future<RegistryEntity> selectById(String id) async {
+    final e = await _api.get(id);
+    await select(e);
+    return e;
+  }
+
   void clearSelection() {
     _selectedId = null;
     _selected = null;

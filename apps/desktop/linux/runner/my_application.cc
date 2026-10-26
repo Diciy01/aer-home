@@ -5,6 +5,9 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "flutter/generated_plugin_registrant.h"
 
 struct _MyApplication {
@@ -52,7 +55,18 @@ static void my_application_activate(GApplication* application) {
     gtk_window_set_title(window, "AER HOME");
   }
 
-  gtk_window_set_default_size(window, 1280, 720);
+  // Development aid: AER_WINDOW_SIZE=1920x1080 sets the initial size
+  // (used for performance and screenshot checks at known resolutions).
+  int width = 1280, height = 720;
+  const char* requested = getenv("AER_WINDOW_SIZE");
+  if (requested != nullptr) {
+    int w = 0, h = 0;
+    if (sscanf(requested, "%dx%d", &w, &h) == 2 && w >= 320 && h >= 240) {
+      width = w;
+      height = h;
+    }
+  }
+  gtk_window_set_default_size(window, width, height);
 
   g_autoptr(FlDartProject) project = fl_dart_project_new();
   fl_dart_project_set_dart_entrypoint_arguments(

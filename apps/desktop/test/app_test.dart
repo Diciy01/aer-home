@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 
 import 'fake_registry_api.dart';
 import 'fixtures.dart';
+import 'scene/scene_fixtures.dart';
 
 void main() {
   Future<ConnectionController> pumpApp(
@@ -16,12 +17,19 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(1366, 768));
     final connection = ConnectionController(clientFor(http));
-    final registry = RegistryController(FakeRegistryApi(), connection);
+    final fakeRegistry = FakeRegistryApi();
+    final registry = RegistryController(fakeRegistry, connection);
     addTearDown(registry.dispose);
+    final scene = sceneControllerFor(
+      connection: connection,
+      registry: fakeRegistry,
+    );
+    addTearDown(scene.dispose);
     await tester.pumpWidget(
       AerHomeApp(
         connection: connection,
         registry: registry,
+        scene: scene,
         section: AppSectionController(AppSection.overview),
       ),
     );
@@ -31,6 +39,7 @@ void main() {
   }
 
   Future<void> finish(WidgetTester tester, ConnectionController c) async {
+    tester.platformDispatcher.clearAccessibilityFeaturesTestValue();
     // Stop the poll timer before the test ends.
     c.dispose();
     await tester.pumpWidget(const SizedBox());
@@ -70,9 +79,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(fixtureInstanceId), findsOneWidget);
 
+    // M03 replaced the house placeholder with the real scene.
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
     await tester.tap(find.text('Дом'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await tester.pumpAndSettle();
-    expect(find.text('Изометрический дом'), findsOneWidget);
+    expect(find.byKey(const Key('room-all')), findsOneWidget);
     expect(find.text(fixtureInstanceId), findsNothing);
 
     await tester.tap(find.text('Обзор'));

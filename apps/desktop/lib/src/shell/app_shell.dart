@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../features/classic/classic_view.dart';
 import '../features/house/house_view.dart';
 import '../features/registry/registry_view.dart';
+import '../scene/scene_controller.dart';
 import '../state/app_section.dart';
 import '../state/connection_controller.dart';
 import '../state/registry_controller.dart';
@@ -14,12 +15,19 @@ class AppShell extends StatelessWidget {
     super.key,
     required this.connection,
     required this.registry,
+    required this.scene,
     required this.section,
   });
 
   final ConnectionController connection;
   final RegistryController registry;
+  final SceneController scene;
   final AppSectionController section;
+
+  void _showInRegistry(String entityId) {
+    section.value = AppSection.devices;
+    registry.selectById(entityId).ignore();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +72,14 @@ class AppShell extends StatelessWidget {
                     child: IndexedStack(
                       index: mode.index,
                       children: [
-                        const HouseView(),
+                        if (section.visited.contains(AppSection.house))
+                          HouseView(
+                            scene: scene,
+                            registry: registry,
+                            onShowInRegistry: _showInRegistry,
+                          )
+                        else
+                          const SizedBox.shrink(),
                         ClassicView(connection: connection),
                         RegistryView(
                           registry: registry,
