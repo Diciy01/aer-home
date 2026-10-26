@@ -1,0 +1,55 @@
+# Разработка и запуск (M01 Foundation)
+
+## Инструменты
+- Go 1.27.3: `<tools>/go-1.27.3/go/bin` (не в PATH профиля). В сессии:
+  `export PATH=<tools>/go-1.27.3/go/bin:$PATH`
+- Flutter 3.47.7 (уже в PATH).
+
+## AER Core
+```bash
+cd core
+go test ./...            # unit + integration + contract
+go vet ./...
+gofmt -l .               # должно быть пусто
+go build -o bin/aer-core ./cmd/aer-core
+./bin/aer-core           # http://127.0.0.1:8787, режим development
+```
+Первый запуск создаёт `~/.local/share/aer-home/core/aer-core.db` и `core.token` (0600). Сам токен не печатается.
+
+Конфигурация (приоритет: defaults < JSON-файл < env):
+
+| Env | JSON | По умолчанию |
+|---|---|---|
+| `AER_CONFIG` / `-config` | — | нет |
+| `AER_MODE` | `mode` | `development` (только loopback) |
+| `AER_LISTEN` | `listenAddr` | `127.0.0.1:8787` |
+| `AER_DATA_DIR` | `dataDir` | `$XDG_DATA_HOME` или `~/.local/share/aer-home/core` (Windows: `%LOCALAPPDATA%\aer-home\core`) |
+| `AER_LOG_LEVEL` | `logLevel` | `info` |
+| `AER_LOG_FORMAT` | `logFormat` | `text` (`json`) |
+| — | `modules: {"name": false}` | все модули включены |
+
+Секреты в конфиг не кладутся (неизвестные поля отклоняются).
+
+Проверка вручную:
+```bash
+curl -s localhost:8787/api/v1/health
+curl -s -H "Authorization: Bearer $(cat ~/.local/share/aer-home/core/core.token)" localhost:8787/api/v1/system/info
+```
+
+## Desktop
+```bash
+cd apps/desktop
+flutter analyze
+flutter test
+flutter run -d linux                    # или
+flutter build linux --release && build/linux/x64/release/bundle/aer_home_desktop
+```
+Переопределения: `AER_CORE_URL` (по умолчанию `http://127.0.0.1:8787`), `AER_CORE_TOKEN_FILE`.
+Без запущенного Core клиент стартует и показывает «Core недоступен».
+
+## Изолированный запуск (не трогая реальные данные)
+```bash
+D=$(mktemp -d)
+AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 core/bin/aer-core &
+AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token apps/desktop/build/linux/x64/release/bundle/aer_home_desktop
+```

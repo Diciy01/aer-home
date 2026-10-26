@@ -17,7 +17,7 @@
 | Tailscale | https://tailscale.com/ | private remote access | EVALUATE setup; no public inbound |
 
 ## Важные оговорки
-1. MeshCentral: https://github.com/Ylianst/MeshCentral/issues/7875 — issue от июня 2026 о неполной поддержке Wayland; прототип обязателен.
+1. MeshCentral: https://github.com/Ylianst/MeshCentral/issues/7875 — issue от июня 2026 о неполной поддержке Wayland; на 2026-10-26 issue **закрыт**, но фактическая поддержка Ubuntu 24.04 Wayland не проверена — прототип обязателен.
 2. Flame даёт primitives, **не** готовый Sims-редактор.
 3. Tiled редактор распространяется по GPL; редактор использовать как отдельную dev tool, данные/ассеты и лицензирование отдельно проверить. Не копировать чужие игровые ассеты без права.
 4. Beszel внешний hub+agent; выбран только если реально легче поддержки собственного сборщика и API удовлетворяет требованиям.

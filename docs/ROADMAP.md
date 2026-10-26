@@ -4,8 +4,8 @@
 
 | ID | Этап | Результат | Статус |
 |---|---|---|---|
-| M00 | Discovery/feasibility | реальное окружение, ADRs, dependency choices, риски remote/Wayland, baseline benchmark | TODO |
-| M01 | Foundation | monorepo, Go Core, SQLite migrations, Flutter shell Linux, API contracts, tests, mocks | TODO |
+| M00 | Discovery/feasibility | реальное окружение, ADRs, dependency choices, риски remote/Wayland, baseline benchmark | DONE 2026-10-26 — `docs/M00_DISCOVERY.md`; Flame FPS-бенчмарк перенесён во вход M03 |
+| M01 | Foundation | monorepo, Go Core, SQLite migrations, Flutter shell Linux, API contracts, tests, mocks | DONE 2026-10-26 — `go test`, `flutter test/analyze`, Linux release build, live Core↔client; Windows build UNVERIFIED (M10); event bus → M05, jobs/audit → M08 |
 | M02 | Registry | device types, CRUD, capabilities, add wizard, secrets refs | TODO |
 | M03 | Scene vertical slice | Flutter Flame одна комната, камера, выбор предмета, provider-agnostic binding | TODO |
 | M04 | Editor | создание комнат, drag/place, undo/redo, save/load, export | TODO |
