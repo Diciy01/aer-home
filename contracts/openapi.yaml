@@ -1,0 +1,120 @@
+openapi: 3.1.0
+info:
+  title: AER HOME Core API (draft)
+  version: 0.1.0
+  description: >
+    Draft contract for architectural discussion. Not an implemented API.
+servers:
+  - url: https://aer-home.local/api/v1
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      summary: Core readiness (authenticated by default)
+      responses:
+        '200':
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp]
+                properties:
+                  status: { type: string, enum: [ok, degraded] }
+                  timestamp: { type: string, format: date-time }
+  /entities:
+    get:
+      summary: List registered entities
+      responses:
+        '200':
+          description: Entity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Entity' }
+    post:
+      summary: Register an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewEntity' }
+      responses:
+        '201':
+          description: Created entity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Entity' }
+  /entities/{entityId}:
+    get:
+      summary: Read an entity
+      parameters:
+        - { name: entityId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Entity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Entity' }
+        '404': { description: Not found }
+  /rooms:
+    get:
+      summary: List rooms
+      responses:
+        '200':
+          description: Rooms
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Room' }
+  /incidents:
+    get:
+      summary: List incident summaries
+      responses:
+        '200':
+          description: Incidents
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Incident' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer }
+  schemas:
+    NewEntity:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string, minLength: 1 }
+        type: { type: string, enum: [computer, server, router, tv, bot, service, custom] }
+        sourceType: { type: string, enum: [manual, agent, docker, http, ping, external] }
+    Entity:
+      allOf:
+        - { $ref: '#/components/schemas/NewEntity' }
+        - type: object
+          required: [id, status, revision]
+          properties:
+            id: { type: string, format: uuid }
+            revision: { type: integer, minimum: 1 }
+            status: { type: string, enum: [ONLINE, DEGRADED, ERROR, OFFLINE, UNKNOWN, MAINTENANCE, STARTING] }
+            lastSeen: { type: [string, 'null'], format: date-time }
+    Room:
+      type: object
+      required: [id, name, sceneVersion]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        sceneVersion: { type: integer }
+    Incident:
+      type: object
+      required: [id, severity, title, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        severity: { type: string, enum: [INFO, WARNING, ERROR, CRITICAL] }
+        createdAt: { type: string, format: date-time }
+        entityId: { type: [string, 'null'], format: uuid }

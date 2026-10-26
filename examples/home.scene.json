@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "name": "Мой цифровой дом — демонстрация",
+  "demo": true,
+  "rooms": [
+    {
+      "id": "room-office",
+      "name": "Кабинет",
+      "scene": {
+        "projection": "isometric",
+        "camera": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "objects": [
+          {
+            "id": "visual-pc",
+            "assetId": "cozy/pc-tower",
+            "transform": {
+              "x": 2,
+              "y": 2,
+              "z": 0,
+              "scale": 1,
+              "rotation": 0
+            },
+            "entityBinding": null,
+            "label": "Основной ПК (демо)"
+          }
+        ]
+      }
+    },
+    {
+      "id": "room-server",
+      "name": "Серверная",
+      "scene": {
+        "projection": "isometric",
+        "camera": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "objects": []
+      }
+    }
+  ]
+}
