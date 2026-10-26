@@ -30,7 +30,7 @@ class ClassicView extends StatelessWidget {
             _SystemInfoCard(info: info, stale: connection.isStale),
           const SizedBox(height: AerSpacing.l),
           Text(
-            'Устройства, инциденты, журналы и боты появятся в модулях M02–M06.',
+            'Устройства и сервисы — в разделе «Устройства». Инциденты, журналы и боты появятся в модулях M05–M06.',
             style: text.bodySmall?.copyWith(color: AerColors.inkMuted),
           ),
         ],

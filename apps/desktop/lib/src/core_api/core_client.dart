@@ -25,6 +25,7 @@ class CoreApiException implements Exception {
     required this.code,
     required this.message,
     this.requestId,
+    this.details = const {},
   });
 
   /// Client-side code for a response that does not follow the envelope.
@@ -37,8 +38,22 @@ class CoreApiException implements Exception {
   final String code;
   final String message;
   final String? requestId;
+  final Map<String, dynamic> details;
 
   bool get isUnauthorized => code == 'UNAUTHORIZED' || code == tokenMissing;
+  bool get isConflict => code == 'CONFLICT';
+  bool get isValidation => code == 'VALIDATION_FAILED';
+  bool get isNotFound => code == 'NOT_FOUND';
+
+  /// For CONFLICT: revision_mismatch | archived | state | duplicate | cycle.
+  String? get conflictReason => details['reason'] as String?;
+
+  /// For VALIDATION_FAILED: field name → human-readable message.
+  Map<String, String> get fieldErrors {
+    final f = details['fields'];
+    if (f is! Map) return const {};
+    return {for (final e in f.entries) '${e.key}': '${e.value}'};
+  }
 
   @override
   String toString() => 'CoreApiException($statusCode $code: $message)';
@@ -62,14 +77,21 @@ class CoreClient {
 
   Uri get baseUri => _base;
 
-  Future<Health> health() async =>
-      Health.fromJson(await _get('/health', authenticated: false));
+  Future<Health> health() async => Health.fromJson(
+    await request('GET', '/health', authenticated: false)
+        as Map<String, dynamic>,
+  );
 
-  Future<SystemInfo> systemInfo() async =>
-      SystemInfo.fromJson(await _get('/system/info'));
+  Future<SystemInfo> systemInfo() async => SystemInfo.fromJson(
+    await request('GET', '/system/info') as Map<String, dynamic>,
+  );
 
-  Future<Map<String, dynamic>> _get(
+  /// Sends a request to `/api/v1[path]` and returns the envelope's `data`.
+  Future<Object?> request(
+    String method,
     String path, {
+    Map<String, Object?>? query,
+    Object? body,
     bool authenticated = true,
   }) async {
     final headers = <String, String>{'Accept': 'application/json'};
@@ -84,11 +106,25 @@ class CoreClient {
       }
       headers['Authorization'] = 'Bearer $token';
     }
+    if (body != null) headers['Content-Type'] = 'application/json';
 
-    final uri = _base.replace(path: '${_base.path}/api/v1$path');
+    final params = <String, dynamic>{};
+    query?.forEach((k, v) {
+      if (v == null) return;
+      params[k] = v is Iterable ? [for (final x in v) '$x'] : '$v';
+    });
+    final uri = _base.replace(
+      path: '${_base.path}/api/v1$path',
+      queryParameters: params.isEmpty ? null : params,
+    );
+
+    final req = http.Request(method, uri)..headers.addAll(headers);
+    if (body != null) req.bodyBytes = utf8.encode(jsonEncode(body));
     final http.Response res;
     try {
-      res = await _http.get(uri, headers: headers).timeout(timeout);
+      res = await http.Response.fromStream(
+        await _http.send(req).timeout(timeout),
+      ).timeout(timeout);
     } on TimeoutException {
       throw CoreUnreachable('no answer within ${timeout.inSeconds}s');
     } on SocketException catch (e) {
@@ -99,7 +135,7 @@ class CoreClient {
     return _decode(res);
   }
 
-  Map<String, dynamic> _decode(http.Response res) {
+  Object? _decode(http.Response res) {
     final Object? body;
     try {
       body = jsonDecode(utf8.decode(res.bodyBytes));
@@ -124,15 +160,16 @@ class CoreClient {
 
     final error = body['error'];
     if (error is Map<String, dynamic>) {
+      final details = error['details'];
       throw CoreApiException(
         statusCode: res.statusCode,
         code: error['code'] as String? ?? CoreApiException.invalidResponse,
         message: error['message'] as String? ?? '',
         requestId: requestId,
+        details: details is Map<String, dynamic> ? details : const {},
       );
     }
-    final data = body['data'];
-    if (res.statusCode >= 300 || data is! Map<String, dynamic>) {
+    if (res.statusCode >= 300 || !body.containsKey('data')) {
       throw CoreApiException(
         statusCode: res.statusCode,
         code: CoreApiException.invalidResponse,
@@ -140,6 +177,6 @@ class CoreClient {
         requestId: requestId,
       );
     }
-    return data;
+    return body['data'];
   }
 }

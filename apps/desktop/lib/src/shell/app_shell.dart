@@ -2,27 +2,36 @@ import 'package:flutter/material.dart';
 
 import '../features/classic/classic_view.dart';
 import '../features/house/house_view.dart';
+import '../features/registry/registry_view.dart';
+import '../state/app_section.dart';
 import '../state/connection_controller.dart';
-import '../state/view_mode.dart';
+import '../state/registry_controller.dart';
 import '../theme/tokens.dart';
 import 'status_presentation.dart';
 
 class AppShell extends StatelessWidget {
-  const AppShell({super.key, required this.connection, required this.viewMode});
+  const AppShell({
+    super.key,
+    required this.connection,
+    required this.registry,
+    required this.section,
+  });
 
   final ConnectionController connection;
-  final ViewModeController viewMode;
+  final RegistryController registry;
+  final AppSectionController section;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ValueListenableBuilder<ViewMode>(
-        valueListenable: viewMode,
+      body: ValueListenableBuilder<AppSection>(
+        valueListenable: section,
         builder: (context, mode, _) => Row(
           children: [
             NavigationRail(
               selectedIndex: mode.index,
-              onDestinationSelected: (i) => viewMode.value = ViewMode.values[i],
+              onDestinationSelected: (i) =>
+                  section.value = AppSection.values[i],
               labelType: NavigationRailLabelType.all,
               leading: const Padding(
                 padding: EdgeInsets.symmetric(vertical: AerSpacing.m),
@@ -35,9 +44,14 @@ class AppShell extends StatelessWidget {
                   label: Text('Дом'),
                 ),
                 NavigationRailDestination(
-                  icon: Icon(Icons.view_agenda_outlined),
-                  selectedIcon: Icon(Icons.view_agenda_rounded),
-                  label: Text('Классика'),
+                  icon: Icon(Icons.dashboard_outlined),
+                  selectedIcon: Icon(Icons.dashboard_rounded),
+                  label: Text('Обзор'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.devices_other_outlined),
+                  selectedIcon: Icon(Icons.devices_other_rounded),
+                  label: Text('Устройства'),
                 ),
               ],
             ),
@@ -52,6 +66,10 @@ class AppShell extends StatelessWidget {
                       children: [
                         const HouseView(),
                         ClassicView(connection: connection),
+                        RegistryView(
+                          registry: registry,
+                          connection: connection,
+                        ),
                       ],
                     ),
                   ),

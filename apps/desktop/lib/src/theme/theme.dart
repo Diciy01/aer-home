@@ -60,6 +60,42 @@ ThemeData buildAerTheme() {
       ),
     ),
     dividerTheme: const DividerThemeData(color: AerColors.border),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: AerColors.background,
+      labelStyle: const TextStyle(color: AerColors.inkMuted),
+      floatingLabelStyle: const TextStyle(color: AerColors.accent),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AerRadii.small),
+        borderSide: const BorderSide(color: AerColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AerRadii.small),
+        borderSide: const BorderSide(color: AerColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AerRadii.small),
+        borderSide: const BorderSide(color: AerColors.accent, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AerRadii.small),
+        borderSide: const BorderSide(color: AerColors.terracotta),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: AerColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AerRadii.large),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: AerColors.ink,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AerRadii.small),
+      ),
+    ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: AerColors.ink,

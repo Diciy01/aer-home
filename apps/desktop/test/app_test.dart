@@ -1,10 +1,12 @@
 import 'package:aer_home_desktop/src/app.dart';
+import 'package:aer_home_desktop/src/state/app_section.dart';
 import 'package:aer_home_desktop/src/state/connection_controller.dart';
-import 'package:aer_home_desktop/src/state/view_mode.dart';
+import 'package:aer_home_desktop/src/state/registry_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
 
+import 'fake_registry_api.dart';
 import 'fixtures.dart';
 
 void main() {
@@ -14,8 +16,14 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(1366, 768));
     final connection = ConnectionController(clientFor(http));
+    final registry = RegistryController(FakeRegistryApi(), connection);
+    addTearDown(registry.dispose);
     await tester.pumpWidget(
-      AerHomeApp(connection: connection, viewMode: ViewModeController()),
+      AerHomeApp(
+        connection: connection,
+        registry: registry,
+        section: AppSectionController(AppSection.overview),
+      ),
     );
     await tester.runAsync(connection.refresh);
     await tester.pump();
@@ -67,7 +75,7 @@ void main() {
     expect(find.text('Изометрический дом'), findsOneWidget);
     expect(find.text(fixtureInstanceId), findsNothing);
 
-    await tester.tap(find.text('Классика'));
+    await tester.tap(find.text('Обзор'));
     await tester.pumpAndSettle();
     expect(
       find.text(fixtureInstanceId),

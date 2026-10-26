@@ -4,8 +4,10 @@ import 'package:http/http.dart' as http;
 import 'src/app.dart';
 import 'src/core_api/core_client.dart';
 import 'src/core_api/endpoint.dart';
+import 'src/core_api/registry_api.dart';
+import 'src/state/app_section.dart';
 import 'src/state/connection_controller.dart';
-import 'src/state/view_mode.dart';
+import 'src/state/registry_controller.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -16,5 +18,12 @@ void main() {
     tokenProvider: endpoint.readToken,
   );
   final connection = ConnectionController(client)..start();
-  runApp(AerHomeApp(connection: connection, viewMode: ViewModeController()));
+  final registry = RegistryController(HttpRegistryApi(client), connection);
+  runApp(
+    AerHomeApp(
+      connection: connection,
+      registry: registry,
+      section: AppSectionController(),
+    ),
+  );
 }

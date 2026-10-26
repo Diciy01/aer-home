@@ -47,6 +47,17 @@ flutter build linux --release && build/linux/x64/release/bundle/aer_home_desktop
 Переопределения: `AER_CORE_URL` (по умолчанию `http://127.0.0.1:8787`), `AER_CORE_TOKEN_FILE`.
 Без запущенного Core клиент стартует и показывает «Core недоступен».
 
+## Живая проверка Registry (integration_test)
+Сквозной тест реального приложения на Linux против запущенного Core (мастер, связи, правка, поиск, архив) с PNG-скриншотами. Запускать **только** с изолированным каталогом данных:
+```bash
+D=$(mktemp -d); mkdir $D/shots
+AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 core/bin/aer-core &
+cd apps/desktop
+AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token AER_SCREENSHOT_DIR=$D/shots \
+  flutter test integration_test -d linux
+```
+Без `AER_CORE_URL` тест пропускается. Все создаваемые объекты помечены «(тест)».
+
 ## Изолированный запуск (не трогая реальные данные)
 ```bash
 D=$(mktemp -d)

@@ -16,7 +16,7 @@
 | Android | Kotlin/Compose + scene, classic | общий desktop stream на телефоне | позднее |
 
 ## Интерфейсы (концептуальные, уточнить в коде)
-- `EntityRepository`: create/get/list/update/archive with optimistic version.
+- `EntityRepository`: create/get/list/update/archive with optimistic version. **Реализовано в M02** как `registry.Reader` (Get/List/Relations/Catalog) — единственный способ для других модулей читать Registry (ADR-008).
 - `CapabilityProvider`: probe(entity) => supported actions and explanation.
 - `TelemetryProvider`: observe(entity) => samples, health, log stream (optional).
 - `ActionExecutor`: plan(command) => risks+confirmation; execute(approved plan) => job.

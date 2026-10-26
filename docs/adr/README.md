@@ -9,3 +9,4 @@
 | ADR-005 | Рендер сцены на iOS | PENDING — после прототипа |
 | [ADR-006](ADR-006-repository-layout.md) | Расположение и структура репозитория | ACCEPTED |
 | [ADR-007](ADR-007-api-envelope-and-auth.md) | Конверт REST, ошибки, локальный токен | ACCEPTED |
+| [ADR-008](ADR-008-registry-model.md) | Модель Registry: каталог, возможности, связи, архив | ACCEPTED |
