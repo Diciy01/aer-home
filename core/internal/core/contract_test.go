@@ -111,7 +111,7 @@ func TestImplementedRoutesMatchContract(t *testing.T) {
 }
 
 func TestContractVersion(t *testing.T) {
-	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.3.") {
+	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.4.") {
 		t.Fatalf("openapi info.version = %q; bump deliberately with an ADR", v)
 	}
 }
@@ -212,6 +212,19 @@ func TestResponsesMatchContractSchemas(t *testing.T) {
 	checkShape(t, doc, "RegistryEntity", call("POST", "/registry/entities/"+hostE.ID+"/archive", `{"revision":3}`))
 	checkShape(t, doc, "RegistryEntity", call("POST", "/registry/entities/"+hostE.ID+"/restore", `{"revision":4}`))
 	call("PATCH", "/registry/entities/"+hostE.ID, `{"revision":1}`) // error envelope shape
+
+	example, err := os.ReadFile(filepath.Join("..", "..", "..", "examples", "home.scene.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := call("POST", "/scenes", string(example))
+	checkShape(t, doc, "SceneRecord", created)
+	var sc struct{ ID string }
+	_ = json.Unmarshal(created, &sc)
+	each("SceneSummary", call("GET", "/scenes", ""))
+	checkShape(t, doc, "SceneRecord", call("GET", "/scenes/"+sc.ID, ""))
+	checkShape(t, doc, "SceneRecord", call("PUT", "/scenes/"+sc.ID,
+		`{"revision":1,"document":`+string(example)+`}`))
 }
 
 func mustJSON(v any) json.RawMessage {

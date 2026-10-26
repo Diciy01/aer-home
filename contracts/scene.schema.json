@@ -1,0 +1,418 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aer-home.local/contracts/scene.schema.json",
+  "title": "AER HOME scene document v1",
+  "description": "Isometric house scene. Units: tiles (1 tile = 0.5 m). See docs/SCENE_FORMAT.md. Cross-field rules (rooms do not overlap, objects stay inside their room, ids unique, assetId/roomId references exist, demo states only in demo scenes and never on bound objects) are enforced by Core and clients.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sceneId",
+    "name",
+    "demo",
+    "projection",
+    "assets",
+    "rooms",
+    "objects",
+    "metadata"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "sceneId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "demo": {
+      "type": "boolean",
+      "description": "True for the bundled demo layout; enables visualState.demo"
+    },
+    "projection": {
+      "const": "isometric-2:1"
+    },
+    "assets": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/asset"
+      }
+    },
+    "rooms": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/room"
+      }
+    },
+    "objects": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "$ref": "#/$defs/object"
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": {
+        "maxLength": 64
+      },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 512
+      }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "footprint",
+        "height",
+        "art"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(/[a-z0-9_.-]+)*$",
+          "maxLength": 64
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "footprint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "w",
+            "d"
+          ],
+          "properties": {
+            "w": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 50
+            },
+            "d": {
+              "type": "number",
+              "minimum": 0.05,
+              "maximum": 50
+            }
+          }
+        },
+        "height": {
+          "type": "number",
+          "minimum": 0.01,
+          "maximum": 40
+        },
+        "art": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "ref",
+            "status"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "procedural",
+                "sprite"
+              ]
+            },
+            "ref": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "status": {
+              "enum": [
+                "placeholder",
+                "final"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "origin",
+        "size",
+        "wallHeight",
+        "style",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "kind": {
+          "enum": [
+            "office",
+            "living",
+            "server",
+            "network",
+            "automation",
+            "bedroom",
+            "kitchen",
+            "custom"
+          ]
+        },
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": -500,
+              "maximum": 500
+            },
+            "y": {
+              "type": "number",
+              "minimum": -500,
+              "maximum": 500
+            }
+          }
+        },
+        "size": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "w",
+            "d"
+          ],
+          "properties": {
+            "w": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 200
+            },
+            "d": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 200
+            }
+          }
+        },
+        "wallHeight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "style": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "floor",
+            "wall"
+          ],
+          "properties": {
+            "floor": {
+              "enum": [
+                "oak",
+                "oak_warm",
+                "tile",
+                "carpet",
+                "concrete"
+              ]
+            },
+            "wall": {
+              "enum": [
+                "cream",
+                "milk",
+                "sand",
+                "beige"
+              ]
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      }
+    },
+    "object": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "roomId",
+        "assetId",
+        "label",
+        "position",
+        "rotation",
+        "scale",
+        "layer",
+        "entityBinding",
+        "visualState",
+        "metadata"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "roomId": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "assetId": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "position": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "description": "Room-local min corner of the rotated footprint; z = elevation of the base",
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 200
+            },
+            "z": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 40
+            }
+          }
+        },
+        "rotation": {
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ],
+          "description": "Quarter turns; front faces +y at 0, +x at 90, -y at 180, -x at 270"
+        },
+        "scale": {
+          "type": "number",
+          "minimum": 0.25,
+          "maximum": 4
+        },
+        "layer": {
+          "enum": [
+            "floor",
+            "object",
+            "wall"
+          ]
+        },
+        "entityBinding": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "entityId",
+                "role"
+              ],
+              "properties": {
+                "entityId": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                },
+                "role": {
+                  "enum": [
+                    "primary",
+                    "secondary"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "visualState": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "demo"
+              ],
+              "properties": {
+                "demo": {
+                  "enum": [
+                    "online",
+                    "offline",
+                    "warning",
+                    "critical",
+                    "unknown",
+                    "loading",
+                    "archived"
+                  ]
+                }
+              }
+            }
+          ],
+          "description": "Only explicitly marked test states for demo scenes. Real states come from Monitoring at runtime and are never stored here."
+        },
+        "metadata": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "maxLength": 64
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      }
+    }
+  }
+}

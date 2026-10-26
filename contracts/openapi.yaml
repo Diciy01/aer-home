@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.3.0
+  version: 0.4.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -12,6 +12,8 @@ info:
     0.3.0 — Registry module under /registry (M02); draft /entities paths and the draft
     Entity/NewEntity schemas are replaced by RegistryEntity (no status field: health
     belongs to Monitoring). See docs/adr/ADR-008-registry-model.md.
+    0.4.0 — Scene storage under /scenes (M03); documents follow contracts/scene.schema.json v1.
+    See docs/adr/ADR-009-scene-engine.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -255,13 +257,13 @@ paths:
                           id: { type: string, format: uuid }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-  /rooms:
+  /scenes:
     get:
-      x-aer-status: planned
-      summary: List rooms (M03/M04 Scene)
+      x-aer-status: implemented
+      summary: List stored scenes (most recently updated first)
       responses:
         '200':
-          description: Rooms
+          description: Scene summaries
           content:
             application/json:
               schema:
@@ -269,9 +271,46 @@ paths:
                   - $ref: '#/components/schemas/SuccessEnvelope'
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items: { $ref: '#/components/schemas/Room' }
+                      data: { type: array, items: { $ref: '#/components/schemas/SceneSummary' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: Store a new scene document (sceneId becomes the scene id)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: 'scene.schema.json' }
+      responses:
+        '201': { $ref: '#/components/responses/Scene' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /scenes/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      x-aer-status: implemented
+      summary: Read a scene with its document
+      responses:
+        '200': { $ref: '#/components/responses/Scene' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      x-aer-status: implemented
+      summary: Replace the document; requires the current revision (previous revision kept in history)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SceneReplaceRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Scene' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
   /incidents:
     get:
       x-aer-status: planned
@@ -328,6 +367,16 @@ components:
               - type: object
                 properties:
                   data: { $ref: '#/components/schemas/RegistryEntity' }
+    Scene:
+      description: The scene with its document
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/SceneRecord' }
     EntityTypeList:
       description: Entity types
       content:
@@ -578,13 +627,36 @@ components:
         createdAt: { type: string, format: date-time }
         direction: { type: string, enum: [outgoing, incoming] }
         peer: { $ref: '#/components/schemas/EntitySummary' }
-    Room:
+    SceneSummary:
       type: object
-      required: [id, name, sceneVersion]
+      required: [id, name, schemaVersion, demo, revision, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        sceneVersion: { type: integer }
+        schemaVersion: { type: integer }
+        demo: { type: boolean }
+        revision: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    SceneRecord:
+      type: object
+      required: [id, name, schemaVersion, demo, revision, createdAt, updatedAt, document]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        schemaVersion: { type: integer }
+        demo: { type: boolean }
+        revision: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        document: { $ref: 'scene.schema.json' }
+    SceneReplaceRequest:
+      type: object
+      required: [revision, document]
+      additionalProperties: false
+      properties:
+        revision: { type: integer, minimum: 1 }
+        document: { $ref: 'scene.schema.json' }
     Incident:
       type: object
       required: [id, severity, title, createdAt]
