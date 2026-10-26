@@ -32,6 +32,12 @@ type Module interface {
 // Factory builds a module once its dependencies are ready.
 type Factory func(Deps) (Module, error)
 
+// Named registers an optional module under its config name.
+type Named struct {
+	Name string
+	New  Factory
+}
+
 // Status describes a known module for /system/info.
 type Status struct {
 	Name    string `json:"name"`

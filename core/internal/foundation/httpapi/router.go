@@ -122,7 +122,9 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	handler, pattern := rt.mux.Handler(r)
 	if pattern != "" {
-		handler.ServeHTTP(sw, r)
+		// Dispatch through the mux itself: only ServeMux.ServeHTTP populates
+		// path values ({id}); the handler returned by Handler() would not see them.
+		rt.mux.ServeHTTP(sw, r)
 		return
 	}
 	// Let the mux decide between 404 and 405, then answer with our envelope.

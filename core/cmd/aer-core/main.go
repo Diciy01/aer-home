@@ -17,6 +17,7 @@ import (
 	"aerhome/core/internal/core"
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/foundation/logging"
+	"aerhome/core/internal/modules"
 )
 
 func main() {
@@ -47,7 +48,7 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	c, err := core.New(ctx, core.Options{Config: cfg, Logger: log})
+	c, err := core.New(ctx, core.Options{Config: cfg, Logger: log, Modules: modules.All()})
 	if err != nil {
 		return err
 	}

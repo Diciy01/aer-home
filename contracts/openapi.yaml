@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.2.0
+  version: 0.3.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -9,6 +9,9 @@ info:
     Every response uses the envelope from ADR-007: `{data, meta}` on success,
     `{error, meta}` on failure.
     Changelog: 0.2.0 — response envelope, error model, public /health, /system/info (M01).
+    0.3.0 — Registry module under /registry (M02); draft /entities paths and the draft
+    Entity/NewEntity schemas are replaced by RegistryEntity (no status field: health
+    belongs to Monitoring). See docs/adr/ADR-008-registry-model.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -50,13 +53,150 @@ paths:
                     properties:
                       data: { $ref: '#/components/schemas/SystemInfo' }
         '401': { $ref: '#/components/responses/Unauthorized' }
-  /entities:
+  /registry/types:
     get:
-      x-aer-status: planned
-      summary: List registered entities (M02 Registry)
+      x-aer-status: implemented
+      summary: Entity type catalog (drives the add wizard)
+      responses:
+        '200': { $ref: '#/components/responses/EntityTypeList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /registry/capabilities:
+    get:
+      x-aer-status: implemented
+      summary: Capability catalog
+      responses:
+        '200': { $ref: '#/components/responses/CapabilityList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /registry/relation-kinds:
+    get:
+      x-aer-status: implemented
+      summary: Relation kind catalog
+      responses:
+        '200': { $ref: '#/components/responses/RelationKindList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /registry/entities:
+    get:
+      x-aer-status: implemented
+      summary: List entities with search, filters and pagination (sorted by name)
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: Case-insensitive search in name, description, address, tags; all words must match }
+        - { name: type, in: query, schema: { type: array, items: { type: string } }, style: form, explode: true }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: capability, in: query, schema: { type: string } }
+        - { name: parentId, in: query, schema: { type: string, format: uuid } }
+        - { name: archived, in: query, schema: { type: string, enum: ['false', 'true', all], default: 'false' } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, minimum: 0, default: 0 } }
       responses:
         '200':
-          description: Entity list
+          description: One page of entities
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RegistryEntityPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+    post:
+      x-aer-status: implemented
+      summary: Register an entity; only name and type are required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewRegistryEntity' }
+      responses:
+        '201': { $ref: '#/components/responses/Entity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /registry/entities/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      x-aer-status: implemented
+      summary: Read an entity (archived entities included)
+      responses:
+        '200': { $ref: '#/components/responses/Entity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      x-aer-status: implemented
+      summary: Change fields; requires the current revision (optimistic locking)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegistryEntityPatch' }
+      responses:
+        '200': { $ref: '#/components/responses/Entity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /registry/entities/{id}/archive:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      x-aer-status: implemented
+      summary: Archive (soft-delete) an entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevisionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Entity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /registry/entities/{id}/restore:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      x-aer-status: implemented
+      summary: Restore an archived entity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevisionRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Entity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /registry/entities/{id}/capabilities:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      x-aer-status: implemented
+      summary: Replace declared capabilities (Registry declares; other modules execute)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CapabilitiesRequest' }
+      responses:
+        '200': { $ref: '#/components/responses/Entity' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /registry/entities/{id}/relations:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      x-aer-status: implemented
+      summary: Outgoing and incoming relations with peer summaries
+      responses:
+        '200':
+          description: Relations
           content:
             application/json:
               schema:
@@ -66,18 +206,20 @@ paths:
                     properties:
                       data:
                         type: array
-                        items: { $ref: '#/components/schemas/Entity' }
+                        items: { $ref: '#/components/schemas/RelationView' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
     post:
-      x-aer-status: planned
-      summary: Register an entity (M02 Registry)
+      x-aer-status: implemented
+      summary: Add a relation from this entity; acyclic kinds reject cycles (409 reason=cycle)
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/NewEntity' }
+            schema: { $ref: '#/components/schemas/NewRelation' }
       responses:
         '201':
-          description: Created entity
+          description: Created relation
           content:
             application/json:
               schema:
@@ -85,16 +227,20 @@ paths:
                   - $ref: '#/components/schemas/SuccessEnvelope'
                   - type: object
                     properties:
-                      data: { $ref: '#/components/schemas/Entity' }
-  /entities/{entityId}:
-    get:
-      x-aer-status: planned
-      summary: Read an entity (M02 Registry)
-      parameters:
-        - { name: entityId, in: path, required: true, schema: { type: string, format: uuid } }
+                      data: { $ref: '#/components/schemas/Relation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /registry/relations/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    delete:
+      x-aer-status: implemented
+      summary: Remove a relation (entities are untouched)
       responses:
         '200':
-          description: Entity
+          description: Deleted
           content:
             application/json:
               schema:
@@ -102,7 +248,12 @@ paths:
                   - $ref: '#/components/schemas/SuccessEnvelope'
                   - type: object
                     properties:
-                      data: { $ref: '#/components/schemas/Entity' }
+                      data:
+                        type: object
+                        required: [id]
+                        properties:
+                          id: { type: string, format: uuid }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /rooms:
     get:
@@ -152,6 +303,61 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    BadRequest:
+      description: Malformed JSON, unknown fields or oversized body
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ValidationFailed:
+      description: "VALIDATION_FAILED; error.details.fields maps field name to a human-readable message"
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: "CONFLICT; error.details.reason is revision_mismatch | archived | state | duplicate | cycle, error.details.currentRevision when known"
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Entity:
+      description: The entity
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties:
+                  data: { $ref: '#/components/schemas/RegistryEntity' }
+    EntityTypeList:
+      description: Entity types
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/EntityType' } }
+    CapabilityList:
+      description: Capabilities
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/Capability' } }
+    RelationKindList:
+      description: Relation kinds
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: '#/components/schemas/SuccessEnvelope'
+              - type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/RelationKind' } }
   schemas:
     Meta:
       type: object
@@ -220,23 +426,158 @@ components:
         modules:
           type: array
           items: { $ref: '#/components/schemas/ModuleStatus' }
-    NewEntity:
+    SecretRef:
+      type: object
+      description: Reference to a secret stored outside AER (never the secret itself)
+      required: [name, ref]
+      properties:
+        name: { type: string, pattern: '^[a-z0-9_.-]{1,64}$' }
+        ref: { type: string, pattern: '^(env|keyring|file|vault):[A-Za-z0-9_./:@-]{1,256}$', example: 'env:PICO_BOT_TOKEN' }
+    Discovery:
+      type: string
+      enum: [manual, agent, docker, network_scan, import, external]
+    RegistryEntity:
+      type: object
+      required: [id, name, type, description, icon, tags, parentId, discovery, address, secretRefs,
+                 attributes, capabilities, revision, createdAt, updatedAt, archived, archivedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        type: { type: string, description: 'Id from GET /registry/types' }
+        description: { type: string }
+        icon: { type: string, description: Visual representation id; defaults to the type icon }
+        tags: { type: array, items: { type: string } }
+        parentId: { type: [string, 'null'], format: uuid, description: 'Physical parent, e.g. an OS runtime belongs to a computer' }
+        discovery: { $ref: '#/components/schemas/Discovery' }
+        address: { type: [string, 'null'], description: 'host, host:port, IP or URL; never with credentials' }
+        secretRefs: { type: array, items: { $ref: '#/components/schemas/SecretRef' } }
+        attributes: { type: object, description: Extensible parameters; secret-looking keys are rejected }
+        capabilities: { type: array, items: { type: string }, description: Declared capabilities, not verified ones }
+        revision: { type: integer, minimum: 1 }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        archived: { type: boolean }
+        archivedAt: { type: [string, 'null'], format: date-time }
+    NewRegistryEntity:
       type: object
       required: [name, type]
+      additionalProperties: false
       properties:
-        name: { type: string, minLength: 1 }
-        type: { type: string, enum: [computer, server, router, tv, bot, service, custom] }
-        sourceType: { type: string, enum: [manual, agent, docker, http, ping, external] }
-    Entity:
-      allOf:
-        - { $ref: '#/components/schemas/NewEntity' }
-        - type: object
-          required: [id, status, revision]
-          properties:
-            id: { type: string, format: uuid }
-            revision: { type: integer, minimum: 1 }
-            status: { type: string, enum: [ONLINE, DEGRADED, ERROR, OFFLINE, UNKNOWN, MAINTENANCE, STARTING] }
-            lastSeen: { type: [string, 'null'], format: date-time }
+        name: { type: string }
+        type: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        tags: { type: array, items: { type: string } }
+        parentId: { type: [string, 'null'], format: uuid }
+        discovery: { $ref: '#/components/schemas/Discovery' }
+        address: { type: [string, 'null'] }
+        secretRefs: { type: array, items: { $ref: '#/components/schemas/SecretRef' } }
+        attributes: { type: object }
+        capabilities: { type: array, items: { type: string }, description: Omit to use the type defaults }
+    RegistryEntityPatch:
+      type: object
+      required: [revision]
+      additionalProperties: false
+      description: Absent fields are unchanged; parentId/address may be null to clear
+      properties:
+        revision: { type: integer, minimum: 1 }
+        name: { type: string }
+        type: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        tags: { type: array, items: { type: string } }
+        parentId: { type: [string, 'null'], format: uuid }
+        discovery: { $ref: '#/components/schemas/Discovery' }
+        address: { type: [string, 'null'] }
+        secretRefs: { type: array, items: { $ref: '#/components/schemas/SecretRef' } }
+        attributes: { type: object }
+    RegistryEntityPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/RegistryEntity' } }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer }
+        offset: { type: integer }
+    RevisionRequest:
+      type: object
+      required: [revision]
+      additionalProperties: false
+      properties:
+        revision: { type: integer, minimum: 1 }
+    CapabilitiesRequest:
+      type: object
+      required: [revision, capabilities]
+      additionalProperties: false
+      properties:
+        revision: { type: integer, minimum: 1 }
+        capabilities: { type: array, items: { type: string } }
+    EntityType:
+      type: object
+      required: [id, label, description, group, icon, addressMode, defaultCapabilities]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        group: { type: string, enum: [hardware, network, software, virtual] }
+        icon: { type: string }
+        addressMode: { type: string, enum: [none, optional, required] }
+        addressHint: { type: string }
+        defaultCapabilities: { type: array, items: { type: string } }
+    Capability:
+      type: object
+      required: [id, label, description, module]
+      properties:
+        id: { type: string, example: power.wake }
+        label: { type: string }
+        description: { type: string }
+        module: { type: string, description: Module that will execute it }
+    RelationKind:
+      type: object
+      required: [id, label, description, acyclic]
+      properties:
+        id: { type: string, enum: [runs_on, depends_on, hosted_by, installed_on, connected_to, controls, custom] }
+        label: { type: string }
+        description: { type: string }
+        acyclic: { type: boolean }
+    NewRelation:
+      type: object
+      required: [kind, targetId]
+      additionalProperties: false
+      properties:
+        kind: { type: string }
+        targetId: { type: string, format: uuid }
+        label: { type: string, description: Required for kind=custom }
+    Relation:
+      type: object
+      required: [id, fromId, toId, kind, label, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromId: { type: string, format: uuid }
+        toId: { type: string, format: uuid }
+        kind: { type: string }
+        label: { type: string }
+        createdAt: { type: string, format: date-time }
+    EntitySummary:
+      type: object
+      required: [id, name, type, archived]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        archived: { type: boolean }
+    RelationView:
+      type: object
+      required: [id, fromId, toId, kind, label, createdAt, direction, peer]
+      properties:
+        id: { type: string, format: uuid }
+        fromId: { type: string, format: uuid }
+        toId: { type: string, format: uuid }
+        kind: { type: string }
+        label: { type: string }
+        createdAt: { type: string, format: date-time }
+        direction: { type: string, enum: [outgoing, incoming] }
+        peer: { $ref: '#/components/schemas/EntitySummary' }
     Room:
       type: object
       required: [id, name, sceneVersion]

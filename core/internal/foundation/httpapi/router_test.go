@@ -32,6 +32,10 @@ func newTestRouter(t *testing.T) (*Router, *strings.Builder) {
 	rt.Handle("GET", "/boom", func(http.ResponseWriter, *http.Request) error {
 		return errors.New("db password=hunter2 leaked?")
 	}, Public())
+	rt.Handle("GET", "/items/{id}", func(w http.ResponseWriter, r *http.Request) error {
+		WriteData(w, r, http.StatusOK, r.PathValue("id"))
+		return nil
+	}, Public())
 	rt.Handle("GET", "/panic", func(http.ResponseWriter, *http.Request) error {
 		panic("kaboom")
 	}, Public())
@@ -155,7 +159,15 @@ func TestTokenNeverLogged(t *testing.T) {
 func TestRoutesListed(t *testing.T) {
 	rt, _ := newTestRouter(t)
 	routes := rt.Routes()
-	if len(routes) != 5 || routes[0].Path != "/boom" {
+	if len(routes) != 6 || routes[0].Path != "/boom" {
 		t.Fatalf("routes = %+v", routes)
+	}
+}
+
+func TestPathValues(t *testing.T) {
+	rt, _ := newTestRouter(t)
+	res, env := do(t, rt, "GET", "/api/v1/items/abc-123", "")
+	if res.StatusCode != 200 || string(env.Data) != `"abc-123"` {
+		t.Fatalf("path value not propagated: %d %s", res.StatusCode, env.Data)
 	}
 }

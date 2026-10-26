@@ -3,7 +3,6 @@ package core
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -13,6 +12,7 @@ import (
 	"aerhome/core/internal/foundation/auth"
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/foundation/httpapi"
+	"aerhome/core/internal/foundation/ids"
 	"aerhome/core/internal/foundation/logging"
 	"aerhome/core/internal/foundation/module"
 	"aerhome/core/internal/foundation/storage"
@@ -28,17 +28,11 @@ var foundationMigrations = []storage.Migration{
 	)`},
 }
 
-// NamedFactory registers an optional module under a config name.
-type NamedFactory struct {
-	Name string
-	New  module.Factory
-}
-
 // Options configure a Core instance.
 type Options struct {
 	Config  config.Config
 	Logger  *slog.Logger
-	Modules []NamedFactory
+	Modules []module.Named
 	Now     func() time.Time
 }
 
@@ -97,7 +91,7 @@ func New(ctx context.Context, opts Options) (*Core, error) {
 	return c, nil
 }
 
-func (c *Core) startModule(ctx context.Context, nf NamedFactory) module.Status {
+func (c *Core) startModule(ctx context.Context, nf module.Named) module.Status {
 	st := module.Status{Name: nf.Name, Enabled: c.cfg.ModuleEnabled(nf.Name)}
 	if !st.Enabled {
 		c.log.Info("module disabled by config", "module", nf.Name)
@@ -140,7 +134,7 @@ func (c *Core) Close() error { return c.db.Close() }
 func ensureInstance(ctx context.Context, db *sql.DB, now time.Time) (instance, error) {
 	if _, err := db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO core_meta (key, value) VALUES ('instance_id', ?), ('created_at', ?)`,
-		newUUID(), now.Format(time.RFC3339)); err != nil {
+		ids.New(), now.Format(time.RFC3339)); err != nil {
 		return instance{}, fmt.Errorf("init core_meta: %w", err)
 	}
 	var in instance
@@ -151,13 +145,4 @@ func ensureInstance(ctx context.Context, db *sql.DB, now time.Time) (instance, e
 		return instance{}, fmt.Errorf("read core_meta: %w", err)
 	}
 	return in, nil
-}
-
-// newUUID returns a random RFC 4122 version 4 UUID.
-func newUUID() string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	b[6] = (b[6] & 0x0f) | 0x40
-	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
 }

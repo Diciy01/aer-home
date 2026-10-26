@@ -43,7 +43,7 @@ func testConfig(t *testing.T, dataDir string) config.Config {
 	return cfg
 }
 
-func newCore(t *testing.T, cfg config.Config, mods ...NamedFactory) *Core {
+func newCore(t *testing.T, cfg config.Config, mods ...module.Named) *Core {
 	t.Helper()
 	c, err := New(context.Background(), Options{
 		Config:  cfg,
@@ -141,12 +141,12 @@ func TestStateSurvivesRestart(t *testing.T) {
 func TestModuleLifecycle(t *testing.T) {
 	cfg := testConfig(t, t.TempDir())
 	cfg.Modules = map[string]bool{"off": false}
-	broken := NamedFactory{Name: "broken", New: func(module.Deps) (module.Module, error) {
+	broken := module.Named{Name: "broken", New: func(module.Deps) (module.Module, error) {
 		return nil, errors.New("adapter unreachable")
 	}}
 	c := newCore(t, cfg,
-		NamedFactory{Name: "fake", New: func(module.Deps) (module.Module, error) { return fakeModule{"fake"}, nil }},
-		NamedFactory{Name: "off", New: func(module.Deps) (module.Module, error) { return fakeModule{"off"}, nil }},
+		module.Named{Name: "fake", New: func(module.Deps) (module.Module, error) { return fakeModule{"fake"}, nil }},
+		module.Named{Name: "off", New: func(module.Deps) (module.Module, error) { return fakeModule{"off"}, nil }},
 		broken,
 	)
 	srv := httptest.NewServer(c.Handler())
@@ -180,12 +180,5 @@ func TestModuleLifecycle(t *testing.T) {
 	get(t, srv, "/api/v1/health", "", &health)
 	if health.Data.Status != "ok" {
 		t.Fatalf("health = %+v", health.Data)
-	}
-}
-
-func TestUUIDv4Format(t *testing.T) {
-	id := newUUID()
-	if len(id) != 36 || id[14] != '4' || !strings.ContainsRune("89ab", rune(id[19])) {
-		t.Fatalf("not a v4 uuid: %s", id)
 	}
 }
