@@ -11,6 +11,7 @@ import (
 
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/foundation/httpapi"
+	"aerhome/core/internal/foundation/logging"
 	"aerhome/core/internal/foundation/storage"
 )
 
@@ -21,6 +22,9 @@ type Deps struct {
 	Demo   bool
 	// Config is the effective Core configuration (no secrets inside).
 	Config config.Config
+	// LogSink carries Core warning+ log records to the module that
+	// centralizes logs (Monitoring); nil when not available.
+	LogSink *logging.Sink
 }
 
 // Runner is implemented by modules with background work (checks, retention).

@@ -27,3 +27,7 @@ build/
 
 # Private local notes (real home details) — never publish
 /docs/private/
+
+# Python
+__pycache__/
+*.pyc

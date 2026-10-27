@@ -49,6 +49,7 @@ type Core struct {
 	modules      []module.Status
 	tokenCreated bool
 	runners      []module.Runner
+	sink         *logging.Sink
 	cancel       context.CancelFunc
 	wg           sync.WaitGroup
 }
@@ -64,7 +65,8 @@ func New(ctx context.Context, opts Options) (*Core, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
-	c := &Core{cfg: opts.Config, log: opts.Logger, now: opts.Now, startedAt: opts.Now().UTC()}
+	sink := logging.NewSink(256)
+	c := &Core{cfg: opts.Config, log: logging.WithSink(opts.Logger, sink), sink: sink, now: opts.Now, startedAt: opts.Now().UTC()}
 
 	db, err := storage.Open(ctx, c.cfg.DatabasePath())
 	if err != nil {
@@ -116,7 +118,7 @@ func (c *Core) startModule(ctx context.Context, nf module.Named) module.Status {
 		st.Error = err.Error()
 		return st
 	}
-	m, err := nf.New(module.Deps{DB: c.db, Logger: logging.Module(c.log, nf.Name), Demo: c.cfg.IsDemo(), Config: c.cfg})
+	m, err := nf.New(module.Deps{DB: c.db, Logger: logging.Module(c.log, nf.Name), Demo: c.cfg.IsDemo(), Config: c.cfg, LogSink: c.sink})
 	if err != nil {
 		return fail(err)
 	}

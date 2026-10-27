@@ -33,7 +33,9 @@ func Factory(reg func() registry.Reader, now func() time.Time) module.Factory {
 		if r == nil {
 			return nil, errors.New("monitoring needs the registry module")
 		}
-		return &Module{svc: NewService(deps.DB, r, deps.Config.Monitoring, deps.Logger, now)}, nil
+		svc := NewService(deps.DB, r, deps.Config.Monitoring, deps.Logger, now)
+		svc.sink = deps.LogSink
+		return &Module{svc: svc}, nil
 	}
 }
 

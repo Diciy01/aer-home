@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"aerhome/core/internal/foundation/config"
+	"aerhome/core/internal/foundation/logging"
 	"aerhome/core/internal/modules/registry"
 )
 
@@ -48,6 +49,7 @@ type Service struct {
 	now func() time.Time
 
 	notifier *Notifier
+	sink     *logging.Sink
 	docker   *DockerWatcher
 
 	stateMu sync.Mutex // state transitions
@@ -131,6 +133,10 @@ func (s *Service) Run(ctx context.Context) {
 	defer retention.Stop()
 	dispatch := time.NewTicker(30 * time.Second)
 	defer dispatch.Stop()
+	var sinkC <-chan logging.Record
+	if s.sink != nil {
+		sinkC = s.sink.Records()
+	}
 	var dockerC <-chan time.Time
 	if s.cfg.Docker.Enabled {
 		t := time.NewTicker(time.Duration(s.cfg.Docker.IntervalSec) * time.Second)
@@ -160,6 +166,16 @@ func (s *Service) Run(ctx context.Context) {
 			}
 		case <-dispatch.C:
 			s.notifier.Dispatch(ctx)
+		case rec := <-sinkC:
+			// Errors while storing Core logs must not be forwarded again.
+			qctx := logging.Quiet(ctx)
+			lvl := LevelWarning
+			if rec.Level >= slog.LevelError {
+				lvl = LevelError
+			}
+			if err := s.IngestSystemLog(qctx, rec.At, lvl, rec.Source, rec.Message, rec.Fields); err != nil {
+				s.log.WarnContext(qctx, "store core log", "err", err)
+			}
 		}
 	}
 }
