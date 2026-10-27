@@ -354,10 +354,7 @@ void main() {
       await tester.tap(find.byKey(const Key('relation-pick')));
       await tester.pumpAndSettle();
       await tester.tap(
-        find.descendant(
-          of: find.byType(ListTile),
-          matching: find.text('PICO'),
-        ),
+        find.descendant(of: find.byType(ListTile), matching: find.text('PICO')),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('relation-save')));

@@ -368,6 +368,20 @@
         "ref": "cozy/terminal",
         "status": "placeholder"
       }
+    },
+    {
+      "id": "cozy/painting",
+      "label": "Картина",
+      "footprint": {
+        "w": 1.6,
+        "d": 0.08
+      },
+      "height": 1.2,
+      "art": {
+        "kind": "procedural",
+        "ref": "cozy/painting",
+        "status": "placeholder"
+      }
     }
   ],
   "rooms": [
@@ -602,6 +616,23 @@
       "rotation": 0,
       "scale": 1.0,
       "layer": "floor",
+      "entityBinding": null,
+      "visualState": null,
+      "metadata": {}
+    },
+    {
+      "id": "82b96fc9-7cc8-46a7-994f-779e137938ed",
+      "roomId": "744aacce-cd98-57d8-a0b5-6fdba72d89fb",
+      "assetId": "cozy/painting",
+      "label": "Картина",
+      "position": {
+        "x": 0.7,
+        "y": 0,
+        "z": 2.3
+      },
+      "rotation": 0,
+      "scale": 1,
+      "layer": "wall",
       "entityBinding": null,
       "visualState": null,
       "metadata": {}

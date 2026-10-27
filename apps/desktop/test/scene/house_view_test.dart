@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:aer_home_desktop/src/app.dart';
 import 'package:aer_home_desktop/src/features/house/house_view.dart';
+import 'package:aer_home_desktop/src/scene/editor/draft_store.dart';
+import 'package:aer_home_desktop/src/scene/model/scene_document.dart';
 import 'package:aer_home_desktop/src/scene/geometry/scene_layout.dart';
 import 'package:aer_home_desktop/src/scene/model/scene_edit.dart';
 import 'package:aer_home_desktop/src/scene/repository/scene_repository.dart';
@@ -30,6 +32,7 @@ Future<H> pumpHouse(
   Size size = const Size(1366, 768),
   bool bind = true,
   MockClient? core,
+  SceneDocument Function(SceneDocument)? draftEdit,
 }) async {
   await tester.binding.setSurfaceSize(size);
   tester.platformDispatcher.accessibilityFeaturesTestValue =
@@ -52,10 +55,21 @@ Future<H> pumpHouse(
   // runs inside the test's fake-async zone.
   await tester.runAsync(connection.refresh);
   final registry = RegistryController(registryApi, connection);
+  final drafts = MemoryDraftStore();
+  final stored = sceneApi.stored.values.firstOrNull;
+  if (draftEdit != null && stored != null) {
+    drafts.data = SceneDraft(
+      document: draftEdit(stored.document),
+      baseRevision: stored.revision,
+      savedAt: DateTime(2026, 10, 27, 9),
+      changes: 1,
+    );
+  }
   final scene = sceneControllerFor(
     connection: connection,
     registry: registryApi,
     api: sceneApi,
+    drafts: drafts,
   );
   await tester.pumpWidget(
     AerHomeApp(

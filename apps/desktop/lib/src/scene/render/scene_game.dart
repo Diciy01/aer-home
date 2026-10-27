@@ -13,9 +13,11 @@ import '../geometry/iso.dart';
 
 import '../art/iso_pen.dart';
 import '../binding/scene_binding.dart';
+import '../catalog/scene_catalog.dart';
 import '../camera/scene_camera.dart';
 import '../geometry/scene_layout.dart';
 import '../model/scene_document.dart';
+import 'editor_layer.dart';
 import 'scene_picture.dart';
 
 /// Colour per visual state (paired with an icon; never colour alone).
@@ -47,6 +49,14 @@ class SceneGame extends FlameGame {
   String? selectedId;
   bool reduceMotion = false;
 
+  /// Materials, lights and finishes used to draw the house.
+  SceneCatalog catalog = SceneCatalog.builtin;
+
+  /// Editor previews (null in view mode).
+  EditorOverlay? _editor;
+  EditorOverlay? get editorOverlay => _editor;
+  String? _hidden;
+
   /// Set by input handlers; until then a resize keeps the whole house framed.
   bool userMovedCamera = false;
   bool _sized = false;
@@ -68,8 +78,16 @@ class SceneGame extends FlameGame {
   @override
   Future<void> onLoad() async {
     world.add(_StaticScene(this));
+    world.add(
+      EditorWorldLayer(
+        () => _editor,
+        () => _layout?.document.rooms ?? const [],
+        () => view.zoom,
+      ),
+    );
     world.add(_Highlights(this));
     camera.viewport.add(_Badges(this));
+    camera.viewport.add(EditorHudLayer(() => _editor, view.worldToScreen));
   }
 
   /// Installs a new layout and/or presentations and rebuilds the picture.
@@ -82,9 +100,7 @@ class SceneGame extends FlameGame {
         _layout == null || _layout!.document.sceneId != layout.document.sceneId;
     _layout = layout;
     _presentations = presentations;
-    _picture?.dispose();
-    _picture = const ScenePictureBuilder().build(layout, presentations);
-    _rasterize(layout);
+    _rebuildPicture();
     view.configure(bounds: layout.bounds.inflate(40));
     if (first || resetCamera) {
       userMovedCamera = false;
@@ -93,6 +109,27 @@ class SceneGame extends FlameGame {
       } else {
         _pendingReset = true;
       }
+    }
+    wake();
+  }
+
+  void _rebuildPicture() {
+    final layout = _layout;
+    if (layout == null) return;
+    _picture?.dispose();
+    _picture = ScenePictureBuilder(catalog)
+        .build(layout, _presentations, hiddenObjectId: _hidden);
+    _rasterize(layout);
+  }
+
+  /// Installs editor previews; the object being dragged is taken out of the
+  /// cached picture (one rebuild at drag start and end, not per frame).
+  void setEditorOverlay(EditorOverlay? overlay) {
+    _editor = overlay;
+    final hidden = overlay?.hiddenObjectId;
+    if (hidden != _hidden) {
+      _hidden = hidden;
+      _rebuildPicture();
     }
     wake();
   }
@@ -207,7 +244,10 @@ class SceneGame extends FlameGame {
 
   /// Whether this frame may use the texture instead of the vector picture.
   bool get useRasterCache =>
-      _cache != null && (_moving || view.zoom * _dpr <= _cacheScale * 1.05);
+      _cache != null &&
+      (_moving ||
+          (_editor?.dragging ?? false) ||
+          view.zoom * _dpr <= _cacheScale * 1.05);
 
   bool _announcePending = false;
 
@@ -247,11 +287,19 @@ class SceneGame extends FlameGame {
     }
   }
 
+  /// The GameWidget may be detached and re-attached (layout changes); the
+  /// cached picture and texture survive that and are freed only here.
+  void disposeResources() {
+    _throttle?.cancel();
+    _cache?.dispose();
+    _cache = null;
+    _picture?.dispose();
+    _picture = null;
+  }
+
   @override
   void onRemove() {
     _throttle?.cancel();
-    _cache?.dispose();
-    _picture?.dispose();
     super.onRemove();
   }
 }

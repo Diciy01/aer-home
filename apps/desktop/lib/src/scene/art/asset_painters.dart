@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import '../model/scene_document.dart';
+import 'home_art.dart';
 import 'iso_pen.dart';
 
 typedef P = ScenePalette;
@@ -40,14 +41,14 @@ typedef AssetPainter = void Function(IsoPen pen, ArtContext ctx);
 /// replaced by drawn sprites listed in docs/SCENE_ART_ASSETS.md without
 /// changing scene logic (only this registry changes).
 final Map<String, AssetPainter> proceduralArt = {
-  'cozy/desk': _desk,
-  'cozy/monitor': _monitor,
-  'cozy/desk_lamp': _deskLamp,
+  'cozy/desk': desk,
+  'cozy/monitor': monitor,
+  'cozy/desk_lamp': deskLampArm,
   'cozy/pc_tower': _pcTower,
-  'cozy/office_chair': _chair,
+  'cozy/office_chair': officeChair,
   'cozy/bookshelf': _bookshelf,
-  'cozy/plant': _plant,
-  'cozy/rug': _rug,
+  'cozy/plant': plantFull,
+  'cozy/rug': rugPattern,
   'cozy/server_rack': _rack,
   'cozy/shelf': _shelf,
   'cozy/server_box': _serverBox,
@@ -66,6 +67,14 @@ final Map<String, AssetPainter> proceduralArt = {
   'cozy/bot_station': _botStation,
   'cozy/bot': _bot,
   'cozy/terminal': _terminal,
+  // M04 catalog additions (home_art.dart).
+  'cozy/armchair': armchair,
+  'cozy/workstation': workstation,
+  'cozy/laptop': laptop,
+  'cozy/access_point': accessPoint,
+  'cozy/speaker': speaker,
+  'cozy/painting': painting,
+  'cozy/vase': vase,
 };
 
 /// Neutral fallback for unknown art refs: a soft crate with a question mark
@@ -90,108 +99,6 @@ void missingArt(IsoPen pen, ArtContext ctx) {
 
 /// Light pool cast on the floor by lamps (drawn in the floor pass).
 const lampLightRadius = {'cozy/floor_lamp': 3.2, 'cozy/desk_lamp': 1.6};
-
-void _desk(IsoPen p, ArtContext c) {
-  const leg = 0.14, top = 1.36;
-  final wood = P.oak, dark = darken(P.oak, 0.25);
-  for (final (u, v) in [(0.08, 0.08), (0.08, p.D - leg - 0.08)]) {
-    p.box(u, v, 0, u + leg, v + leg, top, dark);
-  }
-  // Drawer pedestal on the right.
-  final du = p.W - 1.05;
-  p.box(du, 0.08, 0.05, p.W - 0.08, p.D - 0.08, top, lighten(wood, 0.05));
-  for (final (t0, t1) in [(0.15, 0.6), (0.7, 1.2)]) {
-    p.panel(
-      'front',
-      du,
-      0.08,
-      0.05,
-      p.W - 0.08,
-      p.D - 0.08,
-      top,
-      0.06,
-      t0,
-      0.91,
-      t1,
-      lighten(wood, 0.18),
-    );
-    p.panel(
-      'front',
-      du,
-      0.08,
-      0.05,
-      p.W - 0.08,
-      p.D - 0.08,
-      top,
-      0.38,
-      t1 - 0.12,
-      0.59,
-      t1 - 0.07,
-      dark,
-    );
-  }
-  p.box(0, 0, top, p.W, p.D, 1.5, wood, top: lighten(wood, 0.2));
-}
-
-void _monitor(IsoPen p, ArtContext c) {
-  final cx = p.W / 2;
-  p.box(cx - 0.28, 0.06, 0, cx + 0.28, 0.34, 0.05, P.charcoal);
-  p.box(cx - 0.06, 0.12, 0.05, cx + 0.06, 0.22, 0.38, darken(P.charcoal, 0.1));
-  p.box(0, 0.16, 0.3, p.W, 0.3, p.H, P.charcoal);
-  final screen = c.screenOn ? const Color(0xFF7E9DAD) : const Color(0xFF423B37);
-  p.panel(
-    'front',
-    0,
-    0.16,
-    0.3,
-    p.W,
-    0.3,
-    p.H,
-    0.06,
-    0.06,
-    p.W - 0.06,
-    0.64,
-    screen,
-  );
-  p.panel(
-    'front',
-    0,
-    0.16,
-    0.3,
-    p.W,
-    0.3,
-    p.H,
-    0.12,
-    0.42,
-    0.55,
-    0.6,
-    lighten(screen, 0.2),
-  );
-}
-
-void _deskLamp(IsoPen p, ArtContext c) {
-  final cu = p.W / 2, cv = p.D / 2;
-  p.cylinder(cu, cv, 0.2, 0, 0.06, P.sageDeep);
-  p.box(
-    cu - 0.03,
-    cv - 0.03,
-    0.06,
-    cu + 0.03,
-    cv + 0.03,
-    0.78,
-    darken(P.sage, 0.3),
-  );
-  p.cylinder(
-    cu,
-    cv + 0.05,
-    0.22,
-    0.72,
-    1.02,
-    P.cream,
-    top: lighten(P.cream, 0.3),
-  );
-  p.glow(p.p(cu, cv + 0.05, 0.7), const Color(0xFFFFD79A), radius: 3, halo: 12);
-}
 
 void _pcTower(IsoPen p, ArtContext c) {
   p.box(0, 0, 0, p.W, p.D, p.H, P.milk);
@@ -243,16 +150,6 @@ void _pcTower(IsoPen p, ArtContext c) {
   p.glow(p.p(p.W / 2, p.D + 0.01, p.H - 0.17), c.led, radius: 2, halo: 6);
 }
 
-void _chair(IsoPen p, ArtContext c) {
-  final cu = p.W / 2, cv = p.D / 2;
-  p.disc(cu, cv, 0.06, 0.48, darken(P.charcoal, 0.05));
-  p.cylinder(cu, cv, 0.06, 0.08, 0.8, P.charcoal);
-  p.box(0.1, 0.12, 0.8, p.W - 0.1, p.D - 0.08, 1.02, P.sage);
-  p.box(0.18, 0.02, 1.02, p.W - 0.18, 0.24, p.H, P.sageDeep);
-  p.box(0.02, 0.3, 1.0, 0.14, p.D - 0.2, 1.3, P.charcoal);
-  p.box(p.W - 0.14, 0.3, 1.0, p.W - 0.02, p.D - 0.2, 1.3, P.charcoal);
-}
-
 void _bookshelf(IsoPen p, ArtContext c) {
   final wood = P.walnut;
   const t = 0.08;
@@ -295,52 +192,6 @@ void _bookshelf(IsoPen p, ArtContext c) {
   }
   p.box(t, 0.08, p.H - t, p.W - t, p.D, p.H, lighten(wood, 0.1));
   p.box(p.W - t, 0, 0, p.W, p.D, p.H, wood);
-}
-
-void _plant(IsoPen p, ArtContext c) {
-  final cu = p.W / 2, cv = p.D / 2;
-  p.cylinder(cu, cv, 0.32, 0, 0.55, P.terracotta);
-  p.cylinder(cu, cv, 0.35, 0.5, 0.62, lighten(P.terracotta, 0.08));
-  p.disc(cu, cv, 0.621, 0.3, darken(P.walnut, 0.3));
-  p.sphere(cu - 0.12, cv - 0.05, 1.05, 0.34, P.sageDeep);
-  p.sphere(cu + 0.15, cv + 0.08, 1.25, 0.32, P.sage);
-  p.sphere(cu - 0.02, cv + 0.12, 1.55, 0.28, lighten(P.sage, 0.12));
-}
-
-void _rug(IsoPen p, ArtContext c) {
-  p.box(
-    0,
-    0,
-    0,
-    p.W,
-    p.D,
-    p.H,
-    P.sand,
-    top: lighten(P.sand, 0.15),
-    edges: false,
-  );
-  final inner = [
-    p.p(0.25, 0.25, p.H),
-    p.p(p.W - 0.25, 0.25, p.H),
-    p.p(p.W - 0.25, p.D - 0.25, p.H),
-    p.p(0.25, p.D - 0.25, p.H),
-  ];
-  p.poly(inner, lighten(P.caramel, 0.45));
-  final core = [
-    p.p(0.5, 0.5, p.H),
-    p.p(p.W - 0.5, 0.5, p.H),
-    p.p(p.W - 0.5, p.D - 0.5, p.H),
-    p.p(0.5, p.D - 0.5, p.H),
-  ];
-  p.poly(core, lighten(P.sand, 0.32));
-  for (var u = 0.9; u < p.W - 0.6; u += 0.6) {
-    p.line(
-      p.p(u, 0.6, p.H),
-      p.p(u, p.D - 0.6, p.H),
-      lighten(P.caramel, 0.3).withValues(alpha: 0.6),
-      width: 1.2,
-    );
-  }
 }
 
 void _rack(IsoPen p, ArtContext c) {

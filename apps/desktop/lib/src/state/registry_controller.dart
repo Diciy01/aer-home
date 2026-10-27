@@ -43,6 +43,9 @@ class RegistryController extends ChangeNotifier {
   bool _disposed = false;
 
   RegistryCatalog? get catalog => _catalog;
+
+  /// Raw API for pickers that need their own queries (scene binding wizard).
+  RegistryApi get api => _api;
   List<RegistryEntity> get items => _items;
   int get total => _total;
   EntityQuery get query => _query;

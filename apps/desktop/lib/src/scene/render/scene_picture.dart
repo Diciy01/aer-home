@@ -4,35 +4,27 @@ import 'dart:ui';
 import '../art/asset_painters.dart';
 import '../art/iso_pen.dart';
 import '../binding/scene_binding.dart';
+import '../catalog/scene_catalog.dart';
 import '../geometry/iso.dart';
 import '../geometry/scene_layout.dart';
 import '../model/scene_document.dart';
 
-const _floorColors = {
-  'oak': Color(0xFFD9B58C),
-  'oak_warm': Color(0xFFCFA47D),
-  'tile': Color(0xFFE9DFD1),
-  'carpet': Color(0xFFDCCBB4),
-  'concrete': Color(0xFFD5CEC6),
-};
-
-const _wallColors = {
-  'cream': Color(0xFFF2E5D0),
-  'milk': Color(0xFFF8F0E4),
-  'sand': Color(0xFFE6D2B5),
-  'beige': Color(0xFFEBDAC2),
-};
-
 /// Records the static part of the scene (everything except hover/selection
 /// highlights and status badges) into one vector picture. It is rebuilt only
-/// when the document or object states change, never per frame.
+/// when the document or object states change, never per frame. Materials,
+/// lighting presets and finishes come from the [SceneCatalog] (data).
 class ScenePictureBuilder {
-  const ScenePictureBuilder();
+  const ScenePictureBuilder([this.catalog]);
 
+  final SceneCatalog? catalog;
+  SceneCatalog get _cat => catalog ?? SceneCatalog.builtin;
+
+  /// [hiddenObjectId] is left out (the editor draws it as a moving ghost).
   ui.Picture build(
     SceneLayout layout,
-    Map<String, ObjectPresentation> presentations,
-  ) {
+    Map<String, ObjectPresentation> presentations, {
+    String? hiddenObjectId,
+  }) {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
     _groundShadow(canvas, layout);
@@ -40,9 +32,11 @@ class ScenePictureBuilder {
       _floor(canvas, r);
     }
     for (final g in layout.floorObjects) {
+      if (g.object.id == hiddenObjectId) continue;
       _object(canvas, g, presentations[g.object.id]);
     }
     for (final g in layout.objects.values) {
+      if (g.object.id == hiddenObjectId) continue;
       if (g.object.layer == SceneLayer.object && g.box.minZ < 0.01) {
         _contactShadow(canvas, g);
       }
@@ -54,6 +48,7 @@ class ScenePictureBuilder {
         case WallItem(:final wall):
           _wall(canvas, wall, layout.document.room(wall.roomId)!);
         case ObjectItem(:final geometry):
+          if (geometry.object.id == hiddenObjectId) continue;
           _object(canvas, geometry, presentations[geometry.object.id]);
       }
     }
@@ -82,7 +77,8 @@ class ScenePictureBuilder {
   }
 
   void _floor(Canvas canvas, RoomGeometry r) {
-    final base = _floorColors[r.room.style.floor] ?? _floorColors['oak']!;
+    final material = _cat.floor(r.room.style.floor);
+    final base = material.color;
     final fill = Paint()..isAntiAlias = true;
     final z0 = -floorThickness;
     Offset q(double x, double y, double z) => Iso.project(x, y, z);
@@ -119,8 +115,8 @@ class ScenePictureBuilder {
     final seam = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
-    switch (r.room.style.floor) {
-      case 'oak' || 'oak_warm':
+    switch (material.pattern) {
+      case 'planks':
         var i = 0;
         for (var y = r.y0; y < r.y1; y += 0.5, i++) {
           final tint = i.isEven ? lighten(base, 0.05) : darken(base, 0.03);
@@ -147,7 +143,61 @@ class ScenePictureBuilder {
             seam..color = darken(base, 0.12).withValues(alpha: 0.45),
           );
         }
-      case 'tile':
+      case 'stone':
+        // Large offset slabs with soft tone variation.
+        var row = 0;
+        for (var y = r.y0; y < r.y1; y += 1.5, row++) {
+          final shift = row.isEven ? 0.0 : 1.0;
+          var col = 0;
+          for (var x = r.x0 - shift; x < r.x1; x += 2, col++) {
+            final t = ((row * 7 + col * 3) % 5) / 5;
+            canvas.drawPath(
+              Path()..addPolygon([
+                q(x, y, 0),
+                q(x + 2, y, 0),
+                q(x + 2, y + 1.5, 0),
+                q(x, y + 1.5, 0),
+              ], true),
+              fill
+                ..color = Color.lerp(
+                  lighten(base, 0.06),
+                  darken(base, 0.05),
+                  t,
+                )!,
+            );
+            canvas.drawLine(
+              q(x, y, 0),
+              q(x, y + 1.5, 0),
+              seam..color = darken(base, 0.14).withValues(alpha: 0.55),
+            );
+          }
+          canvas.drawLine(
+            q(r.x0, y, 0),
+            q(r.x1, y, 0),
+            seam..color = darken(base, 0.14).withValues(alpha: 0.55),
+          );
+        }
+      case 'carpet':
+        // Soft pile: faint diagonal texture and a border.
+        for (var k = r.x0 + r.y0; k < r.x1 + r.y1; k += 0.5) {
+          canvas.drawLine(
+            q(k - r.y0, r.y0, 0),
+            q(r.x0, k - r.x0, 0),
+            seam..color = lighten(base, 0.07).withValues(alpha: 0.5),
+          );
+        }
+        canvas.drawPath(
+          Path()..addPolygon([
+            q(r.x0 + 0.3, r.y0 + 0.3, 0),
+            q(r.x1 - 0.3, r.y0 + 0.3, 0),
+            q(r.x1 - 0.3, r.y1 - 0.3, 0),
+            q(r.x0 + 0.3, r.y1 - 0.3, 0),
+          ], true),
+          seam
+            ..color = darken(base, 0.12)
+            ..strokeWidth = 1.2,
+        );
+      case 'tiles':
         for (var x = r.x0; x <= r.x1; x += 1) {
           canvas.drawLine(
             q(x, r.y0, 0),
@@ -192,6 +242,10 @@ class ScenePictureBuilder {
           [0, 0.55, 1],
         ),
     );
+    final light = _cat.light(r.room.style.light);
+    if (light != null && light.tint.a > 0) {
+      canvas.drawPath(top, Paint()..color = light.tint);
+    }
     canvas.restore();
     // Front lip highlight.
     canvas.drawLine(
@@ -256,7 +310,11 @@ class ScenePictureBuilder {
   }
 
   void _wall(Canvas canvas, WallSegment w, SceneRoom room) {
-    final color = _wallColors[room.style.wall] ?? _wallColors['cream']!;
+    final light = _cat.light(room.style.light);
+    var color = _cat.wall(room.style.wall).color;
+    if (light != null && light.tint.a > 0) {
+      color = Color.alphaBlend(light.tint, color);
+    }
     final b = w.box;
     canvas.save();
     final origin = Iso.project(b.minX, b.minY, b.minZ);
@@ -357,33 +415,68 @@ class ScenePictureBuilder {
   }
 
   void _object(Canvas canvas, ObjectGeometry g, ObjectPresentation? p) {
-    final paint = proceduralArt[g.asset.art.ref] ?? missingArt;
     final o = g.object;
-    final origin = Iso.project(g.box.minX, g.box.minY, g.box.minZ);
-    canvas.save();
-    canvas.translate(origin.dx, origin.dy);
-    final archived = p?.status == SceneStatus.archived;
-    if (archived) {
-      // Archived objects stay visible but muted.
-      canvas.saveLayer(
-        null,
-        Paint()..colorFilter = const ColorFilter.matrix(_mute),
-      );
-    }
-    paint(
-      IsoPen(
-        canvas,
-        W: g.asset.footprint.w,
-        D: g.asset.footprint.d,
-        H: g.asset.height,
-        rotation: o.rotation,
-        scale: o.scale,
-      ),
-      ArtContext(status: p?.status),
+    paintAssetArt(
+      canvas,
+      g.asset,
+      g.box,
+      rotation: o.rotation,
+      scale: o.scale,
+      status: p?.status,
+      muted: p?.status == SceneStatus.archived,
+      tint: _cat.finishes[o.metadata['finish']]?.tint,
     );
-    if (archived) canvas.restore();
-    canvas.restore();
   }
+}
+
+/// Paints an asset's art with its min corner at [box]'s projected min corner.
+/// Shared by the static picture and the editor's placement ghost.
+void paintAssetArt(
+  Canvas canvas,
+  SceneAsset asset,
+  Box3 box, {
+  required int rotation,
+  required double scale,
+  SceneStatus? status,
+  bool muted = false,
+  Color? tint,
+  double opacity = 1,
+}) {
+  final paint = proceduralArt[asset.art.ref] ?? missingArt;
+  final origin = Iso.project(box.minX, box.minY, box.minZ);
+  canvas.save();
+  canvas.translate(origin.dx, origin.dy);
+  final tinted = tint != null && tint.a > 0;
+  final layered = muted || tinted || opacity < 1;
+  if (layered) {
+    // Archived objects stay visible but muted; finishes tint the art only.
+    canvas.saveLayer(
+      null,
+      Paint()
+        ..colorFilter = muted ? const ColorFilter.matrix(_mute) : null
+        ..color = Color.fromRGBO(255, 255, 255, opacity),
+    );
+  }
+  paint(
+    IsoPen(
+      canvas,
+      W: asset.footprint.w,
+      D: asset.footprint.d,
+      H: asset.height,
+      rotation: rotation,
+      scale: scale,
+    ),
+    ArtContext(status: status),
+  );
+  if (tinted) {
+    canvas.drawPaint(
+      Paint()
+        ..color = tint
+        ..blendMode = BlendMode.srcATop,
+    );
+  }
+  if (layered) canvas.restore();
+  canvas.restore();
 }
 
 /// Desaturate to ~35% and fade slightly.
