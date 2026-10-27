@@ -94,6 +94,27 @@ AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FIL
 
 Где что лежит: каталог предметов и материалов — `lib/src/scene/catalog/scene_catalog_data.dart` (добавить предмет = запись + отрисовщик в `art/`), команды — `scene/editor/editor_commands.dart`, правила размещения — `scene/editor/placement.dart`. Новая команда редактора = класс `EditCommand` с чистым `apply` поверх `SceneEdits` + тест в `editor_commands_test.dart`.
 
+## Мониторинг (M05): агент, живая проверка, нагрузка
+```bash
+cd core && go build -o bin/aer-core ./cmd/aer-core && go build -o bin/aer-agent ./cmd/aer-agent
+bin/aer-agent -once                       # что агент соберёт на этой машине (ничего не отправляет)
+D=$(mktemp -d)
+echo '{"monitoring":{"checkIntervalSec":5,"heartbeatTimeoutSec":20}}' > $D/core.json
+AER_CONFIG=$D/core.json AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 bin/aer-core &
+# объект + учётные данные агента: «Мониторинг → Агенты и интеграции → Добавить» или
+#   POST /api/v1/registry/entities, затем POST /api/v1/monitoring/agents {entityId,name,kind}
+# токен — в файл с правами 600, конфиг — по образцу deploy/agent/agent.example.json
+bin/aer-agent -config agent.json &
+cd ../apps/desktop
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token \
+  AER_DESKTOP_DATA_DIR=$D/desktop AER_SCREENSHOT_DIR=$D/shots \
+  flutter test integration_test/monitoring_live_test.dart -d linux   # + AER_EXPECT_OFFLINE=1 при остановленном Core
+# синтетическая нагрузка (тестовые данные): хранилище и Core по HTTP
+cd ../../core && bin/aer-monbench -mode store
+bin/aer-monbench -mode http -core http://127.0.0.1:18787 -token-file $D/core.token -devices 100 -duration 120s
+```
+Docker-интеграция читает только локальный сокет; без запущенного Docker интерфейс показывает причину. Telegram — только при `monitoring.telegram.enabled` в конфиге Core.
+
 ## Изолированный запуск (не трогая реальные данные)
 ```bash
 D=$(mktemp -d)

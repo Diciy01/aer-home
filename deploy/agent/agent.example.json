@@ -1,0 +1,19 @@
+{
+  "coreUrl": "http://127.0.0.1:8787",
+  "tokenFile": "/etc/aer-agent/agent.token",
+  "intervalSec": 15,
+  "logIntervalSec": 30,
+  "queueSamples": 5000,
+  "queueLogs": 1000,
+  "collectors": {
+    "cpu": true,
+    "memory": true,
+    "disk": true,
+    "network": true,
+    "temperature": true,
+    "gpu": true,
+    "processes": true,
+    "systemLogs": true,
+    "services": ["ssh.service"]
+  }
+}

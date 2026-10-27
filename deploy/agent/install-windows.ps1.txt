@@ -1,0 +1,11 @@
+# Template — NOT executed automatically. Run manually in an elevated PowerShell
+# after reviewing it (docs/AGENTS.md). Renamed to .txt so it is never run by accident.
+$dir = "$env:ProgramData\AER\agent"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+Copy-Item .\aer-agent.exe "$dir\aer-agent.exe"
+Copy-Item .\agent.json "$dir\agent.json"      # tokenFile: C:\ProgramData\AER\agent\agent.token
+Copy-Item .\agent.token "$dir\agent.token"
+icacls "$dir\agent.token" /inheritance:r /grant:r "SYSTEM:R" "Administrators:R" | Out-Null
+sc.exe create aer-agent binPath= "`"$dir\aer-agent.exe`" -config `"$dir\agent.json`"" start= auto DisplayName= "AER HOME monitoring agent"
+sc.exe failure aer-agent reset= 86400 actions= restart/10000
+# sc.exe start aer-agent

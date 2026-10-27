@@ -1,0 +1,28 @@
+# Template — NOT installed automatically. See docs/AGENTS.md.
+# sudo install -m 0755 aer-agent /usr/local/bin/aer-agent
+# sudo install -d -m 0750 /etc/aer-agent && sudo install -m 0600 agent.token /etc/aer-agent/agent.token
+[Unit]
+Description=AER HOME monitoring agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/aer-agent -config /etc/aer-agent/agent.json
+Restart=on-failure
+RestartSec=10
+DynamicUser=yes
+# Read system logs (warning+) without root:
+SupplementaryGroups=systemd-journal
+# The token arrives as a systemd credential; in agent.json set
+#   "tokenFile": "/run/credentials/aer-agent.service/agent.token"
+LoadCredential=agent.token:/etc/aer-agent/agent.token
+Environment=AER_AGENT_CONFIG=/etc/aer-agent/agent.json
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+MemoryMax=64M
+CPUQuota=10%
+
+[Install]
+WantedBy=multi-user.target

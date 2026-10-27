@@ -1,5 +1,7 @@
 # Monitoring / Bots / Incidents
 
+> Реализация M05: `docs/MONITORING.md` (архитектура, хранение, инциденты, API), `docs/AGENTS.md` (агенты и heartbeat ботов), ADR-011. Этот файл — исходные требования.
+
 ## Lightweight-first
 Для слабого сервера (ориентир 4 ГБ RAM) Core Go + SQLite, ограниченное число probes, TTL и retention. Beszel — необязательный внешний модуль системных метрик; heavy log stack не обязателен. Ограничивать RAM/CPU дисковые квоты, избегать постоянного polling раз в секунду.
 

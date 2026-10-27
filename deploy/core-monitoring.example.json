@@ -1,0 +1,17 @@
+{
+  "mode": "server",
+  "listenAddr": "127.0.0.1:8787",
+  "monitoring": {
+    "checkIntervalSec": 30,
+    "heartbeatTimeoutSec": 60,
+    "failuresBeforeOffline": 2,
+    "rawRetentionDays": 7,
+    "rollupRetentionDays": 30,
+    "logRetentionDays": 14,
+    "logMaxRows": 200000,
+    "resolvedIncidentDays": 365,
+    "notifyRecovery": true,
+    "docker": { "enabled": true, "socket": "/var/run/docker.sock", "intervalSec": 30, "statsIntervalSec": 60 },
+    "telegram": { "enabled": false, "botTokenFile": "", "chatId": "", "minSeverity": "critical" }
+  }
+}
