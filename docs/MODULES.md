@@ -4,7 +4,7 @@
 |---|---|---|---|
 | Foundation | bootstrap, config, auth, jobs, event bus, migrations | UI решения | 00–01 |
 | Registry | сущности, типы, capability, providers, wizard | хранить scene coordinates | 01 |
-| Scene | комнаты, камеры, визуальные объекты, editor state | читать Docker и SSH | 02–03 |
+| Scene | комнаты, камеры, визуальные объекты, editor state; редактор M04 (команды, история, проверка размещения, черновик, каталог) — на клиенте, Core хранит документ и ревизии | читать Docker и SSH; копировать данные Registry в сцену | 02–04 |
 | Monitoring | probes, heartbeat, logs, incidents, retention | самочинно перезапускать службы | 04 |
 | Bots | регистрации ботов, задача, health, ошибки | хранить Telegram токены в UI | 05 |
 | Remote | negotiation сеанса, policy, desktop/apps/files/clipboard | прямой доступ к bootloader | SPIKE + 07 |
@@ -22,7 +22,8 @@
 - `ActionExecutor`: plan(command) => risks+confirmation; execute(approved plan) => job.
 - `RemoteProvider`: list sessions/apps; negotiateDesktop; negotiateWindow; clipboard/file capability.
 - `BootProvider`: discover modes, validate prerequisites, planOneShotBoot, verifyPostBoot.
-- `SceneRepository`: load/save scene version, visual-object bindings.
+- `SceneRepository`: load/save scene version, visual-object bindings. **Реализовано в M03/M04**: `SceneApi` (list/get/create/replace с revision, 409 при конфликте), `SceneCache` (офлайн-копия), `SceneDraftStore` (черновик редактора).
+- Редактор (M04, клиент): `EditorController` → `EditCommand.apply(doc)` поверх `SceneEdits` → `EditHistory` (снимки) → `SceneController.previewDocument` → рендерер получает `EditorOverlay` (только данные). Проверка — `PlacementValidator`, справочник — `SceneCatalog` (ADR-010).
 
 ## Правила
 - Один модуль = отдельный пакет и владелец таблиц; public API/contract tests.

@@ -8,7 +8,7 @@
 | M01 | Foundation | monorepo, Go Core, SQLite migrations, Flutter shell Linux, API contracts, tests, mocks | DONE 2026-10-26 — `go test`, `flutter test/analyze`, Linux release build, live Core↔client; Windows build UNVERIFIED (M10); event bus → M05, jobs/audit → M08 |
 | M02 | Registry | device types, CRUD, capabilities, add wizard, secrets refs | DONE 2026-10-26 — ADR-008, contract 0.3.0; Go unit/HTTP/contract tests, Flutter 44 tests, live integration_test против реального Core; scene binding → M03, export/import → M04, UI правки secretRefs/attributes/icon — позже |
 | M03 | Scene vertical slice | Flutter Flame одна комната, камера, выбор предмета, provider-agnostic binding | DONE 2026-10-26 — 5 комнат, 35 объектов; формат v1 + Core `/scenes`; ADR-009; 60 fps (замер `docs/M03_SCENE_REPORT.md`); графика временная (procedural placeholder), финальные спрайты — `docs/SCENE_ART_ASSETS.md` |
-| M04 | Editor | создание комнат, drag/place, undo/redo, save/load, export | TODO |
+| M04 | Editor | создание комнат, drag/place, undo/redo, save/load, export | DONE 2026-10-27 — режим строительства, каталог 33 предметов, проверка размещения, Undo/Redo, черновик, конфликты ревизий, привязки Registry; ADR-010, contract 0.5.0; 60 fps при 200 объектах (замер `docs/M04_EDITOR_REPORT.md`); графика — улучшенный placeholder (не финал); импорт/экспорт JSON отложен |
 | M05 | Monitoring | lightweight probes, journal, incidents, evidence, log rotation | TODO |
 | M06 | Bots | heartbeat/task results, Docker/log adapters, UI/alerts | TODO |
 | S-Remote | Feasibility SPIKE | Windows/Linux Wayland desktop, clipboard, file, iOS isolated app window | TODO |

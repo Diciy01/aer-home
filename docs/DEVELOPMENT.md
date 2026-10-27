@@ -74,6 +74,26 @@ AER_WINDOW_SIZE=1920x1080 flutter drive --profile --driver=test_driver/integrati
 ```
 Переменные клиента: `AER_DESKTOP_DATA_DIR` — каталог офлайн-кэша сцены; `AER_WINDOW_SIZE=WxH` — начальный размер окна (Linux); `AER_SCENE_FPS_LOG=1` — печать кадров сцены в секунду.
 
+## Редактор (M04): тесты, живая проверка, замеры
+Юнит- и виджет-тесты редактора — `apps/desktop/test/scene/editor/` (команды и история, проверка размещения и каталог, контроллер с фейковыми Core/Registry, черновик на реальных файлах во временном каталоге, интерфейс при 1366×768 и 1920×1080, горячие клавиши, drag-and-drop). Входят в обычный `flutter test`.
+```bash
+D=$(mktemp -d); mkdir -p $D/shots $D/desktop
+AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 core/bin/aer-core &
+cd apps/desktop
+# весь путь пользователя мышью против реального Core: строительство, каталог, размещение,
+# перетаскивание, привязка, новая комната, размер, Undo/Redo, сохранение, конфликт, перезапуск, черновик
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token \
+  AER_DESKTOP_DATA_DIR=$D/desktop AER_SCREENSHOT_DIR=$D/shots \
+  flutter test integration_test/editor_live_test.dart -d linux
+# замеры 35/100/200 объектов (profile); с AER_CORE_URL — ещё и сохранение большой сцены
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token \
+  flutter drive --profile --driver=test_driver/integration_test.dart \
+  --target=integration_test/editor_perf_test.dart -d linux   # → build/integration_response_data.json
+```
+`registry_live_test` рассчитывает на пустой Core — запускать на отдельном каталоге данных.
+
+Где что лежит: каталог предметов и материалов — `lib/src/scene/catalog/scene_catalog_data.dart` (добавить предмет = запись + отрисовщик в `art/`), команды — `scene/editor/editor_commands.dart`, правила размещения — `scene/editor/placement.dart`. Новая команда редактора = класс `EditCommand` с чистым `apply` поверх `SceneEdits` + тест в `editor_commands_test.dart`.
+
 ## Изолированный запуск (не трогая реальные данные)
 ```bash
 D=$(mktemp -d)

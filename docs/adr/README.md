@@ -11,3 +11,4 @@
 | [ADR-007](ADR-007-api-envelope-and-auth.md) | Конверт REST, ошибки, локальный токен | ACCEPTED |
 | [ADR-008](ADR-008-registry-model.md) | Модель Registry: каталог, возможности, связи, архив | ACCEPTED |
 | [ADR-009](ADR-009-scene-engine.md) | Движок сцены: формат v1, хранение, Flame, растровый кэш | ACCEPTED |
+| [ADR-010](ADR-010-scene-editor.md) | Редактор дома: команды и история снимков, проверка размещения, черновик, материалы-данные | ACCEPTED |
