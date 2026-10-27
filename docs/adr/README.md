@@ -4,7 +4,7 @@
 |---|---|---|
 | [ADR-001](ADR-001-go-sqlite.md) | Go + SQLite (modernc, WAL) для Core | ACCEPTED |
 | [ADR-002](ADR-002-flutter-flame.md) | Flutter desktop + Flame для сцены | ACCEPTED (Flame подтверждён замером M03, ADR-009) |
-| ADR-003 | Remote provider | PENDING — после S-Remote |
+| [ADR-013](ADR-013-remote-transport.md) (бывш. ADR-003) | Remote provider: RDP, Core как плоскость управления | ACCEPTED |
 | ADR-004 | Cross-OS boot control | PENDING — после S-Power и инвентаризации загрузчика |
 | ADR-005 | Рендер сцены на iOS | PENDING — после прототипа |
 | [ADR-006](ADR-006-repository-layout.md) | Расположение и структура репозитория | ACCEPTED |
