@@ -38,6 +38,8 @@ type Config struct {
 	Monitoring Monitoring `json:"monitoring"`
 	// Bots configures the Bots module (M06): management adapters and integrations.
 	Bots Bots `json:"bots"`
+	// Remote configures the Remote access control plane (M07).
+	Remote Remote `json:"remote"`
 }
 
 // EnvLookup matches os.LookupEnv so tests can inject an isolated environment.
@@ -53,6 +55,7 @@ func Default(env EnvLookup) Config {
 		LogFormat:  "text",
 		Monitoring: DefaultMonitoring(),
 		Bots:       DefaultBots(),
+		Remote:     DefaultRemote(),
 	}
 }
 
@@ -127,6 +130,9 @@ func (c Config) Validate() error {
 		errs = append(errs, err)
 	}
 	if err := c.Bots.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Remote.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

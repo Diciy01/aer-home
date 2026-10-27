@@ -48,8 +48,8 @@ func (s *Service) CreateAgent(ctx context.Context, entityID, name, kind string) 
 	if kind == "" {
 		kind = "host"
 	}
-	if kind != "host" && kind != "bot" {
-		v.add("kind", "host или bot")
+	if kind != "host" && kind != "bot" && kind != "remote" {
+		v.add("kind", "host, bot или remote")
 	}
 	if err := v.orNil(); err != nil {
 		return CreatedAgent{}, err

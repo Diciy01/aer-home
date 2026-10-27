@@ -154,7 +154,7 @@ type Agent struct {
 	ID         string     `json:"id"`
 	EntityID   string     `json:"entityId"`
 	Name       string     `json:"name"`
-	Kind       string     `json:"kind"` // host | bot
+	Kind       string     `json:"kind"` // host | bot | remote (remote access host agent, M07)
 	CreatedAt  time.Time  `json:"createdAt"`
 	RevokedAt  *time.Time `json:"revokedAt"`
 	LastSeenAt *time.Time `json:"lastSeenAt"`

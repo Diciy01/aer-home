@@ -6,6 +6,7 @@ import (
 	"aerhome/core/internal/modules/bots"
 	"aerhome/core/internal/modules/monitoring"
 	"aerhome/core/internal/modules/registry"
+	"aerhome/core/internal/modules/remote"
 	"aerhome/core/internal/modules/scene"
 )
 
@@ -41,6 +42,17 @@ func All() []module.Named {
 				return nil
 			}
 			return reg.Writer()
+		}, func() *monitoring.Service {
+			if mon == nil {
+				return nil
+			}
+			return mon.Service()
+		}, nil)},
+		{Name: remote.Name, New: remote.Factory(func() registry.Reader {
+			if reg == nil {
+				return nil
+			}
+			return reg.Service()
 		}, func() *monitoring.Service {
 			if mon == nil {
 				return nil

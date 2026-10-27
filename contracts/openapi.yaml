@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.7.0
+  version: 0.8.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -25,6 +25,10 @@ info:
     Monitoring, jobs, logs, actions with single-use confirmation + Idempotency-Key + audit, adapters;
     bot protocol POST /bots/agent/jobs (agentAuth, kind=bot). BotStatus gains `version`. Additive.
     See docs/adr/ADR-012-bots.md.
+    0.8.0 — Remote (M07) under /remote: hosts over Registry with real readiness, owner policy,
+    sessions (pending … revoked) with a one-time grant, revoke, audit; host agent protocol
+    (agentAuth, kind=remote: hello, long-poll commands, session events). Agent kind `remote`.
+    Video/input/files never pass through Core. See docs/adr/ADR-013-remote-transport.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -1050,6 +1054,326 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /remote/hosts:
+    get:
+      x-aer-status: implemented
+      summary: "Remote-capable computers with real readiness (agent, Monitoring, policy, active session)"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteHost' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/hosts/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "One remote host"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteHost' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/hosts/{id}/policy:
+    put:
+      x-aer-status: implemented
+      summary: "Owner policy (intersected with what the host declares); disabling revokes active sessions"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemotePolicy' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteHost' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /remote/hosts/{id}/revoke-sessions:
+    post:
+      x-aer-status: implemented
+      summary: "Revoke every active session of the host"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteHost' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/hosts/{id}/apps:
+    get:
+      x-aer-status: implemented
+      summary: "Remote Apps (mobile): allowed application windows, or UNSUPPORTED with the reason"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteApps' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/sessions:
+    get:
+      x-aer-status: implemented
+      summary: "Session history (metadata only)"
+      parameters:
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteSession' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: "Request a session; checks readiness, policy and limits; one session per Idempotency-Key"
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string, maxLength: 100 }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteNewSession' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '503':
+          description: "UNAVAILABLE: host not ready (reason in message)"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/sessions/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "Session with its audit trail"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/sessions/{id}/grant:
+    post:
+      x-aer-status: implemented
+      summary: "One-time connection data (password, pinned certificate, files token); 410 when already granted or ended"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: "already granted / ended / lost"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/sessions/{id}/end:
+    post:
+      x-aer-status: implemented
+      summary: "End the session normally"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/sessions/{id}/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Revoke the session immediately (host disables RDP)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/agent/hello:
+    post:
+      x-aer-status: implemented
+      summary: "Host agent (kind=remote): report host facts; answer lists sessions Core considers active"
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteHostInfo' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [serverTime, activeSessions, pollSec], properties: { serverTime: { type: string, format: date-time }, activeSessions: { type: array, items: { type: string } }, pollSec: { type: integer } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "not a remote agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /remote/agent/commands:
+    get:
+      x-aer-status: implemented
+      summary: "Host agent long-poll for open/close commands"
+      security:
+        - agentAuth: []
+      parameters:
+        - { name: wait, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 25 }, description: "seconds" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [commands], properties: { commands: { type: array, items: { $ref: '#/components/schemas/RemoteCommand' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "not a remote agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/agent/sessions/{id}/events:
+    post:
+      x-aer-status: implemented
+      summary: "Host agent reports a session event of its own host"
+      security:
+        - agentAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteAgentEvent' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [state], properties: { state: { $ref: '#/components/schemas/RemoteState' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "foreign session or not a remote agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -1433,7 +1757,7 @@ components:
         id: { type: string, format: uuid }
         entityId: { type: string, format: uuid }
         name: { type: string }
-        kind: { type: string, enum: [host, bot] }
+        kind: { type: string, enum: [host, bot, remote] }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: [string, 'null'], format: date-time }
         lastSeenAt: { type: [string, 'null'], format: date-time }
@@ -1447,7 +1771,7 @@ components:
       properties:
         entityId: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 80 }
-        kind: { type: string, enum: [host, bot] }
+        kind: { type: string, enum: [host, bot, remote] }
     CreatedAgent:
       type: object
       required: [agent, token]
@@ -1996,3 +2320,167 @@ components:
               finishedAt: { type: string, format: date-time }
               result: { type: string }
               error: { type: string }
+    RemoteState: { type: string, enum: [pending, awaiting_approval, connecting, connected, reconnecting, disconnected, failed, expired, revoked] }
+    RemoteCaps:
+      type: object
+      required: [desktop, input, clipboard, files, apps]
+      properties:
+        desktop: { type: boolean }
+        input: { type: boolean }
+        clipboard: { type: boolean }
+        files: { type: boolean }
+        apps: { type: boolean, description: single-application isolation; no current backend provides it }
+    RemoteHostInfo:
+      type: object
+      additionalProperties: false
+      required: [backend, address, port, approval]
+      properties:
+        os: { type: string }
+        osVersion: { type: string }
+        hostname: { type: string }
+        version: { type: string }
+        backend: { type: string, enum: [gnome-rdp, windows-rdp] }
+        transport: { type: string, enum: [rdp] }
+        address: { type: string, description: address the client connects to (LAN/VPN) }
+        port: { type: integer }
+        certPem: { type: string, description: public TLS certificate of the RDP server, pinned by clients }
+        filesPort: { type: integer }
+        monitors: { type: integer }
+        capabilities: { $ref: '#/components/schemas/RemoteCaps' }
+        approval: { type: string, enum: [auto, prompt] }
+        ready: { type: boolean }
+        reason: { type: string }
+        username: { type: string }
+    RemotePolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        desktop: { type: boolean }
+        clipboard: { type: boolean }
+        files: { type: boolean }
+        maxMinutes: { type: integer, minimum: 5 }
+        revision: { type: integer }
+    RemoteEvent:
+      type: object
+      required: [at, kind, message]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { type: string }
+        message: { type: string }
+    RemoteSession:
+      type: object
+      required: [id, entityId, hostName, kind, sourceName, sourceEntityId, clientId, transport, state, reason, allowed, createdAt,
+        approvedAt, readyAt, grantedAt, connectedAt, endedAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        hostName: { type: string }
+        kind: { type: string, enum: [desktop, app] }
+        sourceName: { type: string }
+        sourceEntityId: { type: string }
+        clientId: { type: string }
+        transport: { type: string }
+        state: { $ref: '#/components/schemas/RemoteState' }
+        reason: { type: string }
+        allowed: { $ref: '#/components/schemas/RemoteCaps' }
+        createdAt: { type: string, format: date-time }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        readyAt: { type: [string, 'null'], format: date-time }
+        grantedAt: { type: [string, 'null'], format: date-time }
+        connectedAt: { type: [string, 'null'], format: date-time }
+        endedAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/RemoteEvent' } }
+    RemoteHost:
+      type: object
+      required: [entityId, name, type, archived, declaredCapabilities, agent, agentActive, lastHelloAt, certSha256, policy, effective,
+        canConnect, reason, status, statusReason, lastContactAt, activeSession, lastSession]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        archived: { type: boolean }
+        declaredCapabilities: { type: array, items: { type: string } }
+        agent: { oneOf: [{ $ref: '#/components/schemas/RemoteHostInfo' }, { type: 'null' }] }
+        agentActive: { type: boolean }
+        lastHelloAt: { type: [string, 'null'], format: date-time }
+        certSha256: { type: string }
+        policy: { $ref: '#/components/schemas/RemotePolicy' }
+        effective: { $ref: '#/components/schemas/RemoteCaps' }
+        canConnect: { type: boolean }
+        reason: { type: string, description: why connecting is not possible now }
+        status: { $ref: '#/components/schemas/MonitoringStatus' }
+        statusReason: { type: string }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        activeSession: { oneOf: [{ $ref: '#/components/schemas/RemoteSession' }, { type: 'null' }] }
+        lastSession: { oneOf: [{ $ref: '#/components/schemas/RemoteSession' }, { type: 'null' }] }
+    RemoteNewSession:
+      type: object
+      additionalProperties: false
+      required: [entityId]
+      properties:
+        entityId: { type: string, format: uuid }
+        kind: { type: string, enum: [desktop, app] }
+        sourceName: { type: string, maxLength: 120 }
+        sourceEntityId: { type: string }
+        clientId: { type: string, maxLength: 80 }
+        minutes: { type: integer, minimum: 1 }
+        clipboard: { type: boolean }
+        files: { type: boolean }
+    RemoteGrant:
+      type: object
+      required: [sessionId, transport, host, port, username, password, certPem, certSha256, clipboard, files, expiresAt, externalClient]
+      properties:
+        sessionId: { type: string, format: uuid }
+        transport: { type: string }
+        host: { type: string }
+        port: { type: integer }
+        username: { type: string }
+        password: { type: string, description: one-time session password; empty for Windows hosts (OS account) }
+        certPem: { type: string }
+        certSha256: { type: string }
+        clipboard: { type: boolean }
+        files:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [url, token, maxBytes]
+              properties:
+                url: { type: string }
+                token: { type: string }
+                maxBytes: { type: integer }
+        expiresAt: { type: string, format: date-time }
+        externalClient: { type: string }
+    RemoteApps:
+      type: object
+      required: [status, reason, apps]
+      properties:
+        status: { type: string, enum: [unsupported, available] }
+        reason: { type: string }
+        apps:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              title: { type: string }
+    RemoteCommand:
+      type: object
+      required: [id, type, sessionId, expiresAt, allowed]
+      properties:
+        id: { type: string }
+        type: { type: string, enum: [open, close] }
+        sessionId: { type: string }
+        expiresAt: { type: string, format: date-time }
+        allowed: { $ref: '#/components/schemas/RemoteCaps' }
+        reason: { type: string }
+    RemoteAgentEvent:
+      type: object
+      additionalProperties: false
+      required: [event]
+      properties:
+        event: { type: string, enum: [awaiting_approval, approved, denied, ready, connected, disconnected, closed, failed] }
+        password: { type: string, description: only with ready; kept in Core memory until the one-time grant }
+        filesToken: { type: string }
+        message: { type: string }
