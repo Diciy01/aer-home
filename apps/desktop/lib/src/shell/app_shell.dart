@@ -4,6 +4,7 @@ import '../features/bots/bot_details.dart';
 import '../features/bots/bot_scene_panel.dart';
 import '../features/bots/bots_view.dart';
 import '../features/classic/classic_view.dart';
+import '../features/remote/remote_view.dart';
 import '../features/house/house_view.dart';
 import '../features/monitoring/device_diagnostics.dart';
 import '../features/monitoring/mon_widgets.dart';
@@ -12,6 +13,7 @@ import '../features/registry/registry_view.dart';
 import '../scene/scene_controller.dart';
 import '../state/app_section.dart';
 import '../state/bots_controller.dart';
+import '../state/remote_controller.dart';
 import '../state/connection_controller.dart';
 import '../state/monitoring_controller.dart';
 import '../state/registry_controller.dart';
@@ -27,6 +29,7 @@ class AppShell extends StatelessWidget {
     required this.section,
     this.monitoring,
     this.bots,
+    this.remote,
   });
 
   final ConnectionController connection;
@@ -39,6 +42,33 @@ class AppShell extends StatelessWidget {
   final BotsController? bots;
 
   BotsController? get _bots => monitoring == null ? null : bots;
+
+  /// Remote (M07); shown after Bots, needs Monitoring too.
+  final RemoteController? remote;
+
+  RemoteController? get _remote => _bots == null ? null : remote;
+
+  Widget? _entityPanel(BuildContext context, String entityId) {
+    final r = _remote;
+    final bot = _botPanel(context, entityId);
+    if (r == null) return bot;
+    final remotePanel = ListenableBuilder(
+      listenable: r,
+      builder: (context, _) {
+        final h = r.hostFor(entityId);
+        if (h == null) return const SizedBox.shrink();
+        return RemoteScenePanel(
+          remote: r,
+          host: h,
+          onOpen: () => section.value = AppSection.remote,
+        );
+      },
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [?bot, remotePanel],
+    );
+  }
 
   Widget? _botPanel(BuildContext context, String entityId) {
     final b = _bots;
@@ -113,6 +143,15 @@ class AppShell extends StatelessWidget {
                     selectedIcon: Icon(Icons.smart_toy_rounded),
                     label: Text('Боты'),
                   ),
+                if (_remote != null)
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.cast_connected_outlined),
+                    selectedIcon: Icon(Icons.cast_connected_rounded),
+                    label: Text(
+                      'Удалённый\nдоступ',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
               ],
             ),
             Expanded(
@@ -135,7 +174,7 @@ class AppShell extends StatelessWidget {
                                       showDiagnostics(context, monitoring!, id),
                             entityPanel: _bots == null
                                 ? null
-                                : (id) => _botPanel(context, id),
+                                : (id) => _entityPanel(context, id),
                           )
                         else
                           const SizedBox.shrink(),
@@ -158,6 +197,10 @@ class AppShell extends StatelessWidget {
                                   mon: monitoring!,
                                   registry: registry,
                                 )
+                              : const SizedBox.shrink(),
+                        if (_remote case final r?)
+                          section.visited.contains(AppSection.remote)
+                              ? RemoteView(remote: r)
                               : const SizedBox.shrink(),
                       ],
                     ),
