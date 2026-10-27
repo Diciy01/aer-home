@@ -1,5 +1,7 @@
 # Мониторинг (M05)
 
+> M06: боты используют это же хранилище через хуки сервиса (`AppendLog`, `RecordEvent`, `StoreSamples`, `RaiseIncident`/`ResolveIncident`, `SetIntegrationStatus`, `EventsOfKinds`) — `docs/BOTS.md`, ADR-012.
+
 Что работает, что сломалось, что недоступно и где искать причину. Решения — ADR-011; агенты — `docs/AGENTS.md`; замеры — `docs/M05_MONITORING_REPORT.md`.
 
 ## Архитектура
@@ -36,7 +38,7 @@
 
 Отдельно различаются «нет данных» (`unknown`), «ошибка проверки» (причина в `reason`) и «реально недоступен» (`offline`). Последний контакт хранится всегда; при недоступности показывается последнее известное время, текущие значения выключенного ПК не запрашиваются.
 
-Переопределения в Registry: `attributes.monitoring = {"disabled": true, "ports": [22], "url": "https://…", "container": "имя"}`.
+Переопределения в Registry: `attributes.monitoring = {"disabled": true, "ports": [22], "url": "https://…", "container": "имя", "heartbeatTimeoutSec": 45}`. `heartbeatTimeoutSec` (M06) — собственный тайм-аут агентов объекта (его выставляет Bots из настроек бота). Для ботов, приложений, процессов, служб и автоматизаций без heartbeat используется `container` (Docker), затем `url` (HTTP, для n8n — `/healthz`), иначе «неизвестно».
 
 ## Метрики
 Каталог — `GET /monitoring/metric-types` (CPU, память, swap, заполнение и свободное место дисков, сеть приём/передача/ошибки, температуры CPU/GPU, загрузка GPU, uptime, число процессов, состояние служб, ресурсы процесса бота, доступность API Telegram, Docker CPU/RAM/сеть). Каждое значение: устройство, метрика, метка (точка монтирования, интерфейс, служба), значение или `null`, единица, время, источник, `quality` (`ok`/`unsupported`/`unavailable`) и причина отсутствия.
@@ -48,7 +50,7 @@
 | Сырые значения | `mon_samples` | 7 дней | `rawRetentionDays` |
 | 5-минутные агрегаты (min/max/avg) | `mon_rollups` | 30 дней | `rollupRetentionDays` |
 | Текущие значения | `mon_latest` | не удаляются | — |
-| Логи | `mon_logs` | 14 дней и не больше 200 000 строк | `logRetentionDays`, `logMaxRows`, `logRatePerMin` (600/мин на источник) |
+| Логи (индекс `(entity_id, id)` — миграция v2, M06) | `mon_logs` | 14 дней и не больше 200 000 строк | `logRetentionDays`, `logMaxRows`, `logRatePerMin` (600/мин на источник) |
 | Решённые инциденты (с хронологией) | `mon_incidents`, `mon_incident_events` | 365 дней; `0` — навсегда; открытые не удаляются | `resolvedIncidentDays` |
 | История событий | `mon_events` | max(30, rollup) дней | — |
 | Уведомления | `mon_notifications` | 90 дней | `notificationRetentionDays` |
@@ -58,7 +60,7 @@
 Конфигурация — раздел `monitoring` JSON-конфига Core (пример: `deploy/core-monitoring.example.json`); недопустимые значения отклоняются при запуске.
 
 ## Инциденты
-- Ключи: `availability:<entity>`, `disk_low:<entity>:<mount>`, `cpu.temperature:<entity>`, `gpu.temperature:<entity>`, `service_down:<entity>:<unit>`, `bot_api:<entity>`, `container:<name>`, `integration:docker`.
+- Ключи: `availability:<entity>`, `disk_low:<entity>:<mount>`, `cpu.temperature:<entity>`, `gpu.temperature:<entity>`, `service_down:<entity>:<unit>`, `bot_api:<entity>`, `container:<name>`, `integration:docker`; от Bots (M06): `bot_process:<entity>` (процесс под управлением Core завершился сам), `n8n_failed:<entity>` (новое неудачное выполнение n8n).
 - Один нерешённый инцидент на ключ; повторы — `occurrences` и запись «повтор» в хронологии не чаще раза в 10 минут.
 - Статусы: `open` → (`acknowledged`) → `resolved`. Восстановление закрывает инцидент автоматически (в т.ч. подтверждённый).
 - Серьёзность доступности: `critical` для сервера, роутера, сайта, БД, контейнера, бота, сетевого устройства, хранилища; `warning` для ПК и прочего. Пороги: свободно < 10 % — предупреждение, < 5 % — критично (закрытие при > 12 %); температура ≥ 90 °C (закрытие < 85 °C); 2 замера подряд.

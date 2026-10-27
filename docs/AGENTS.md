@@ -51,6 +51,8 @@ GOOS=windows GOARCH=amd64 go build -o aer-agent.exe ./cmd/aer-agent
 Затем — шаги из `deploy/agent/install-windows.ps1.txt` в PowerShell от администратора (копирование в `C:\ProgramData\AER\agent`, права на токен, `sc.exe create aer-agent …`). Агент сам определяет запуск как служба Windows.
 
 ## Боты (heartbeat)
+
+> M06: бота удобнее добавлять в разделе «Боты» — мастер сам создаёт объект, связи и токен. Библиотека 0.2.0 дополнительно передаёт версию бота (`Heartbeat(..., version="1.2")`), задания (`job_started`/`job_finished` → `POST /bots/agent/jobs`) и CPU/RAM своего процесса на Linux. Пример тестового бота — `tools/bot-heartbeat/example_bot.py`; подключение — `docs/BOTS_CONNECT.md`.
 Учётные данные с видом «Heartbeat бота» + `tools/bot-heartbeat/aer_heartbeat.py` (только стандартная библиотека Python):
 ```python
 from aer_heartbeat import Heartbeat

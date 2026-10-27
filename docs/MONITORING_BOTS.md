@@ -1,5 +1,6 @@
 # Monitoring / Bots / Incidents
 
+> Боты как модуль (конфигурация, адаптеры, задания, управление) — M06: `docs/BOTS.md`, ADR-012.
 > Реализация M05: `docs/MONITORING.md` (архитектура, хранение, инциденты, API), `docs/AGENTS.md` (агенты и heartbeat ботов), ADR-011. Этот файл — исходные требования.
 
 ## Lightweight-first

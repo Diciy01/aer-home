@@ -115,6 +115,33 @@ bin/aer-monbench -mode http -core http://127.0.0.1:18787 -token-file $D/core.tok
 ```
 Docker-интеграция читает только локальный сокет; без запущенного Docker интерфейс показывает причину. Telegram — только при `monitoring.telegram.enabled` в конфиге Core.
 
+## Боты (M06): тестовый бот, живая проверка, нагрузка
+```bash
+cd core && go build -o bin/aer-core ./cmd/aer-core && go build -o bin/aer-botbench ./cmd/aer-botbench
+D=$(mktemp -d); R=$(cd .. && pwd)
+# конфиг с ОДНИМ изолированным процессом-адаптером: тестовый бот без Telegram
+python3 - "$D" "$R" <<'PY'
+import json, sys
+d, r = sys.argv[1], sys.argv[2]
+json.dump({"mode": "development", "listenAddr": "127.0.0.1:18797", "dataDir": d + "/data",
+           "bots": {"controllers": [{"id": "example-bot", "kind": "process", "stopTimeoutSec": 5,
+                                     "allow": ["start", "stop", "restart"],
+                                     "command": ["/usr/bin/python3", "-u", r + "/tools/bot-heartbeat/example_bot.py",
+                                                 "--core", "http://127.0.0.1:18797", "--token-file", d + "/bot.token"]}]}},
+          open(d + "/core.json", "w"))
+PY
+bin/aer-core -config $D/core.json &
+# «Боты → Добавить бота»: тип «Процесс», адаптер example-bot, токен heartbeat → $D/bot.token (chmod 600) → «Запустить»
+cd ../apps/desktop
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18797 AER_CORE_TOKEN_FILE=$D/data/core.token \
+  AER_DESKTOP_DATA_DIR=$D/desktop AER_SCREENSHOT_DIR=$D/shots \
+  flutter test integration_test/bots_live_test.dart -d linux   # ждёт «Тестовый бот (пример)» и бота n8n
+# синтетическая нагрузка (тестовые данные)
+cd ../../core && bin/aer-botbench -mode store
+bin/aer-botbench -mode http -core http://127.0.0.1:18797 -token-file $D/data/core.token -core-pid "$(pgrep -n -x aer-core)" -bots 50 -duration 60s
+```
+Go-тесты управляют только своими процессами `/bin/sh` во временном каталоге; Docker, systemd и n8n в тестах — подделки API. Реальные боты, контейнеры и службы не затрагиваются. Живая проверка n8n в отчёте M06 шла против заглушки API (`/healthz`, workflows, executions, retry).
+
 ## Изолированный запуск (не трогая реальные данные)
 ```bash
 D=$(mktemp -d)

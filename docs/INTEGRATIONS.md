@@ -11,6 +11,7 @@
 | MeshCentral | https://github.com/Ylianst/MeshCentral | desktop/files/terminal agents | SPIKE FIRST; Ubuntu Wayland issue |
 | RustDesk | https://github.com/rustdesk/rustdesk | desktop remoting alternative | SPIKE FIRST, license/embedding review |
 | Apache Guacamole | https://github.com/apache/guacamole-client | browser RDP/VNC/SSH gateway | OPTIONAL; may add dependencies |
+| n8n | https://docs.n8n.io/api/ | автоматизации: workflows, выполнения, повтор | INTEGRATED (M06, адаптер `n8n`): публичный REST API, ключ из файла, read-only + повтор по подтверждению; реальный n8n не подключался — проверено на заглушке API |
 | Uptime Kuma | https://github.com/louislam/uptime-kuma | availability checks/heartbeat | OPTIONAL, do not depend on undocumented API |
 | Healthchecks | https://github.com/healthchecks/healthchecks | scheduled job heartbeat | REFERENCE; too heavy for few bots |
 | Sunshine/Moonlight | https://github.com/LizardByte/Sunshine ; https://github.com/moonlight-stream/moonlight-android | уже выбранный TV-streaming | INTEGRATE STATUS only first; not clipboard/files solution |
