@@ -105,9 +105,14 @@ func TestValidationRules(t *testing.T) {
 		"room size": {func(d map[string]any) {
 			d["rooms"].([]any)[0].(map[string]any)["size"] = map[string]any{"w": 0, "d": 4}
 		}, "rooms[0].size.w"},
-		"unknown floor": {func(d map[string]any) {
-			d["rooms"].([]any)[0].(map[string]any)["style"] = map[string]any{"floor": "lava", "wall": "cream"}
+		// Materials are data-defined since contract 0.5.0: any well-formed id is
+		// accepted (clients fall back for unknown ones), malformed ids are not.
+		"malformed floor": {func(d map[string]any) {
+			d["rooms"].([]any)[0].(map[string]any)["style"] = map[string]any{"floor": "Lava Rock", "wall": "cream"}
 		}, "rooms[0].style.floor"},
+		"malformed light": {func(d map[string]any) {
+			d["rooms"].([]any)[0].(map[string]any)["style"] = map[string]any{"floor": "oak", "wall": "cream", "light": "../x"}
+		}, "rooms[0].style.light"},
 		"object id not uuid":  {func(d map[string]any) { obj(d, 0)["id"] = "visual-pc" }, "objects[0].id"},
 		"duplicate object id": {func(d map[string]any) { obj(d, 1)["id"] = obj(d, 0)["id"] }, "objects[1].id"},
 		"unknown room":        {func(d map[string]any) { obj(d, 0)["roomId"] = "00000000-0000-4000-8000-000000000000" }, "objects[0].roomId"},
@@ -314,5 +319,33 @@ func TestHTTP(t *testing.T) {
 	}
 	if code, _ = do("GET", "/scenes/not-a-uuid", ""); code != 404 {
 		t.Fatalf("bad id: %d", code)
+	}
+}
+
+func TestDataDefinedMaterialsAndLight(t *testing.T) {
+	raw := mutate(t, func(d map[string]any) {
+		d["rooms"].([]any)[0].(map[string]any)["style"] = map[string]any{"floor": "stone_light", "wall": "sage", "light": "evening"}
+	})
+	doc, err := Decode(raw)
+	if err != nil {
+		t.Fatalf("new material ids must be accepted: %v", err)
+	}
+	if s := doc.Rooms[0].Style; s.Floor != "stone_light" || s.Wall != "sage" || s.Light != "evening" {
+		t.Fatalf("style = %+v", s)
+	}
+	out, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"light":"evening"`) {
+		t.Fatalf("light lost in encoding: %s", out)
+	}
+	// Rooms without light keep the v1 shape (no empty field written).
+	plain, err := json.Marshal(doc.Rooms[1].Style)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(plain), "light") {
+		t.Fatalf("empty light must be omitted: %s", plain)
 	}
 }

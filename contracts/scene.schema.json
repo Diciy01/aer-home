@@ -235,23 +235,20 @@
           ],
           "properties": {
             "floor": {
-              "enum": [
-                "oak",
-                "oak_warm",
-                "tile",
-                "carpet",
-                "concrete"
-              ]
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
             },
             "wall": {
-              "enum": [
-                "cream",
-                "milk",
-                "sand",
-                "beige"
-              ]
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$"
+            },
+            "light": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,31}$",
+              "description": "Optional lighting preset (additive in contract 0.5.0)"
             }
-          }
+          },
+          "description": "Material ids from the client material catalog (data-defined since contract 0.5.0); unknown ids are drawn with a fallback."
         },
         "metadata": {
           "type": "object",

@@ -223,12 +223,12 @@ func TestListFilterSearchPaginate(t *testing.T) {
 		{ListFilter{Tag: "HOME"}, []string{"Основной ПК", "Сервер"}},
 		{ListFilter{Capability: "power.reboot"}, []string{"Основной ПК", "Сервер"}},
 		{ListFilter{Capability: "bot.tasks"}, []string{"PICO бот"}},
-		{ListFilter{Query: "основной"}, []string{"Основной ПК"}},     // Cyrillic, case-insensitive
+		{ListFilter{Query: "основной"}, []string{"Основной ПК"}},    // Cyrillic, case-insensitive
 		{ListFilter{Query: "TELEGRAM"}, []string{"PICO бот"}},       // description
-		{ListFilter{Query: "192.0.2.154"}, []string{"Основной ПК"}},  // address
-		{ListFilter{Query: "media"}, []string{"Mini TV"}},        // tag
-		{ListFilter{Query: "pico отвечает"}, []string{"PICO бот"}}, // all terms must match
-		{ListFilter{Query: "%"}, []string{}},                         // LIKE wildcards escaped
+		{ListFilter{Query: "192.0.2.154"}, []string{"Основной ПК"}}, // address
+		{ListFilter{Query: "media"}, []string{"Mini TV"}},           // tag
+		{ListFilter{Query: "pico отвечает"}, []string{"PICO бот"}},  // all terms must match
+		{ListFilter{Query: "%"}, []string{}},                        // LIKE wildcards escaped
 		{ListFilter{Limit: 2, Offset: 2}, []string{"postgres", "Основной ПК"}},
 	}
 	for _, c := range checks {

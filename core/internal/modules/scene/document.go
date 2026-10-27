@@ -64,9 +64,14 @@ type Asset struct {
 	Art       Art     `json:"art"`
 }
 
+// RoomStyle names materials from the client's material catalog. Core checks
+// only the identifier shape, so new materials need no Core release; an
+// unknown material is drawn with a fallback by clients.
 type RoomStyle struct {
 	Floor string `json:"floor"`
 	Wall  string `json:"wall"`
+	// Light is an optional lighting preset (contract 0.5.0, additive).
+	Light string `json:"light,omitempty"`
 }
 
 type Room struct {
@@ -124,8 +129,7 @@ const (
 var (
 	assetIDPattern = regexp.MustCompile(`^[a-z0-9_]+(/[a-z0-9_.-]+)*$`)
 	roomKinds      = set("office", "living", "server", "network", "automation", "bedroom", "kitchen", "custom")
-	floorStyles    = set("oak", "oak_warm", "tile", "carpet", "concrete")
-	wallStyles     = set("cream", "milk", "sand", "beige")
+	materialID     = regexp.MustCompile(`^[a-z][a-z0-9_]{0,31}$`)
 	layers         = set("floor", "object", "wall")
 	artKinds       = set("procedural", "sprite")
 	artStatuses    = set("placeholder", "final")
@@ -304,11 +308,14 @@ func (d Document) Validate() error {
 		inRange(is, p+".size.w", r.Size.W, 1, maxRoomSize)
 		inRange(is, p+".size.d", r.Size.D, 1, maxRoomSize)
 		inRange(is, p+".wallHeight", r.WallHeight, 0, maxWallHeight)
-		if !floorStyles[r.Style.Floor] {
-			is.add(p+".style.floor", "Неизвестный пол")
+		if !materialID.MatchString(r.Style.Floor) {
+			is.add(p+".style.floor", "Идентификатор материала пола: a-z, цифры, _ (до 32)")
 		}
-		if !wallStyles[r.Style.Wall] {
-			is.add(p+".style.wall", "Неизвестные стены")
+		if !materialID.MatchString(r.Style.Wall) {
+			is.add(p+".style.wall", "Идентификатор материала стен: a-z, цифры, _ (до 32)")
+		}
+		if r.Style.Light != "" && !materialID.MatchString(r.Style.Light) {
+			is.add(p+".style.light", "Идентификатор освещения: a-z, цифры, _ (до 32)")
 		}
 		metadata(is, p+".metadata", r.Metadata)
 		for j, other := range d.Rooms[:i] {

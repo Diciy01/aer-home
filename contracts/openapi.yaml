@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.4.0
+  version: 0.5.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -14,6 +14,9 @@ info:
     belongs to Monitoring). See docs/adr/ADR-008-registry-model.md.
     0.4.0 — Scene storage under /scenes (M03); documents follow contracts/scene.schema.json v1.
     See docs/adr/ADR-009-scene-engine.md.
+    0.5.0 — Scene editor (M04): room style materials are data-defined ids (pattern instead of
+    enum), optional `style.light`; additive, every 0.4.0 document stays valid.
+    See docs/adr/ADR-010-scene-editor.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
