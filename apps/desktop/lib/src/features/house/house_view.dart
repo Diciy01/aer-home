@@ -34,6 +34,7 @@ class HouseView extends StatefulWidget {
     required this.onShowInRegistry,
     this.game,
     this.catalog,
+    this.onOpenDiagnostics,
   });
 
   final SceneController scene;
@@ -47,6 +48,9 @@ class HouseView extends StatefulWidget {
 
   /// Editor catalog; the built-in one by default.
   final SceneCatalog? catalog;
+
+  /// Opens Monitoring diagnostics of an entity (null: Monitoring absent).
+  final void Function(String entityId)? onOpenDiagnostics;
 
   @override
   State<HouseView> createState() => HouseViewState();
@@ -977,6 +981,13 @@ class HouseViewState extends State<HouseView> implements EditorActions {
                 onClose: () => interaction.select(null),
                 onOpen: _canOpen(p) ? () => _openDetails(g) : null,
                 onProperties: () => showObjectProperties(context, g, p),
+                onDiagnostics:
+                    widget.onOpenDiagnostics == null ||
+                        g.object.entityBinding == null
+                    ? null
+                    : () => widget.onOpenDiagnostics!(
+                        g.object.entityBinding!.entityId,
+                      ),
               ),
             ),
         if (_details &&

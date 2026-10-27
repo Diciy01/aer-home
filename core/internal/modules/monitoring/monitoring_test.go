@@ -852,3 +852,17 @@ func TestRedact(t *testing.T) {
 		}
 	}
 }
+
+func TestSilentHostWithManyPortsIsStillRecorded(t *testing.T) {
+	f := newFixture(t, func(c *config.Monitoring) { c.CheckTimeoutSec = 1 })
+	r := f.entity(t, "Роутер (тест)", "router", "192.0.2.1") // default 4 ports, TEST-NET
+	start := time.Now()
+	f.svc.CheckAll(f.ctx)
+	if time.Since(start) > 2500*time.Millisecond {
+		t.Fatalf("ports must be probed in parallel: %v", time.Since(start))
+	}
+	st := f.state(t, r.ID)
+	if st.LastCheckAt == nil || st.Reason == "Ещё не проверялся" {
+		t.Fatalf("result must be saved even after the deadline: %+v", st)
+	}
+}

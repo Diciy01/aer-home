@@ -40,7 +40,10 @@ class SceneController extends ChangeNotifier {
     String Function(String type)? typeLabel,
     String Function(String capability)? capabilityLabel,
     SceneDraftStore? draftStore,
+    LiveStatus? Function(String entityId)? liveStatus,
+    this._liveChanges,
   }) : _api = sceneApi,
+       _live = liveStatus,
        drafts = draftStore ?? SceneDraftStore.besideCache(sceneCache.file),
        _registry = registryApi,
        _connection = connectionController,
@@ -49,10 +52,13 @@ class SceneController extends ChangeNotifier {
        _typeLabel = typeLabel ?? ((t) => t),
        _capabilityLabel = capabilityLabel ?? ((c) => c) {
     _connection.addListener(_onConnection);
+    _liveChanges?.addListener(_onLive);
     _wasOnline = _connection.canAct;
   }
 
   final SceneApi _api;
+  final LiveStatus? Function(String)? _live;
+  final Listenable? _liveChanges;
 
   /// Local editor draft storage (next to the offline cache).
   final SceneDraftStore drafts;
@@ -201,17 +207,43 @@ class SceneController extends ChangeNotifier {
     if (doc.boundEntityIds.isEmpty) _link = RegistryLink.live;
   }
 
-  void _recompute() {
+  /// Monitoring polls every few seconds: rebuild the house picture only
+  /// when something visible actually changed.
+  void _onLive() {
+    final before = _signature(_presentations);
+    final keep = _presentations;
+    _recompute(silent: true);
+    if (_signature(_presentations) == before) {
+      _presentations = keep;
+      return;
+    }
+    _notify();
+  }
+
+  static String _signature(Map<String, ObjectPresentation> p) => [
+    for (final e in p.entries)
+      '${e.key}:${e.value.status?.name}:${e.value.stale}:${e.value.title}:${e.value.live?.openIncidents}:${e.value.note}',
+  ].join('|');
+
+  void _recompute({bool silent = false}) {
     final doc = _document;
     if (doc == null) {
       _presentations = {};
     } else {
       _presentations = {
         for (final o in doc.objects)
-          o.id: presentObject(o, doc.asset(o.assetId), _snapshots, _link),
+          o.id: presentObject(
+            o,
+            doc.asset(o.assetId),
+            _snapshots,
+            _link,
+            o.entityBinding == null
+                ? null
+                : _live?.call(o.entityBinding!.entityId),
+          ),
       };
     }
-    _notify();
+    if (!silent) _notify();
   }
 
   /// Re-reads bound entities from Registry. On failure the last known
@@ -354,6 +386,7 @@ class SceneController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _connection.removeListener(_onConnection);
+    _liveChanges?.removeListener(_onLive);
     super.dispose();
   }
 }

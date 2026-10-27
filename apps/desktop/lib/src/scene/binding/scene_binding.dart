@@ -62,6 +62,26 @@ class EntitySnapshot {
   };
 }
 
+/// Real state of a bound entity from Monitoring (M05). Scene knows only
+/// this small model, never Monitoring's API or tables.
+class LiveStatus {
+  const LiveStatus({
+    required this.status,
+    required this.note,
+    this.stale = false,
+    this.lastContactAt,
+    this.openIncidents = 0,
+  });
+
+  final SceneStatus status;
+  final String note;
+
+  /// The value is the last known one (client offline or data outdated).
+  final bool stale;
+  final DateTime? lastContactAt;
+  final int openIncidents;
+}
+
 /// How fresh the Registry knowledge is.
 enum RegistryLink { loading, live, stale, unavailable }
 
@@ -78,6 +98,7 @@ class ObjectPresentation {
     this.stale = false,
     required this.note,
     this.snapshot,
+    this.live,
   });
 
   final String title;
@@ -95,17 +116,22 @@ class ObjectPresentation {
   final String note;
   final EntitySnapshot? snapshot;
 
+  /// Monitoring state, when known.
+  final LiveStatus? live;
+
   bool get isBound => binding != BindingState.unbound;
 }
 
-/// Combines a scene object with Registry knowledge. Never invents a healthy
-/// state: real entities show `unknown` until Monitoring exists.
+/// Combines a scene object with Registry knowledge and the Monitoring state.
+/// Never invents a healthy state: without monitoring data a real entity
+/// shows `unknown`; stale data is marked as such.
 ObjectPresentation presentObject(
   SceneObject o,
   SceneAsset? asset,
   Map<String, EntitySnapshot> snapshots,
-  RegistryLink link,
-) {
+  RegistryLink link, [
+  LiveStatus? live,
+]) {
   final fallbackTitle = o.label.isNotEmpty
       ? o.label
       : (asset?.label ?? o.assetId);
@@ -171,9 +197,10 @@ ObjectPresentation presentObject(
     title: snap.name,
     subtitle: snap.typeLabel.isEmpty ? snap.type : snap.typeLabel,
     binding: BindingState.resolved,
-    status: SceneStatus.unknown,
-    stale: stale,
-    note: 'Состояние не отслеживается: модуль Monitoring ещё не подключён',
+    status: live?.status ?? SceneStatus.unknown,
+    stale: stale || (live?.stale ?? false),
+    note: live?.note ?? 'Нет данных мониторинга для этого объекта',
     snapshot: snap,
+    live: live,
   );
 }

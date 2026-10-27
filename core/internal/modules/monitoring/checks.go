@@ -107,7 +107,8 @@ func (s *Service) RefreshEntity(ctx context.Context, id string) {
 
 func (s *Service) checkEntity(ctx context.Context, e registry.Entity) {
 	obs := s.observe(ctx, e)
-	s.apply(ctx, e, obs)
+	// The probe may have used up the check deadline; the result is still saved.
+	s.apply(context.WithoutCancel(ctx), e, obs)
 }
 
 func (s *Service) observe(ctx context.Context, e registry.Entity) observation {
@@ -258,26 +259,39 @@ func (s *Service) probeHTTP(ctx context.Context, raw string) observation {
 // probeTCP checks reachability by TCP connect. A refused connection proves
 // the host is up; silence on every port is "no answer", not proof of power-off.
 func (s *Service) probeTCP(ctx context.Context, host string, ports []int) observation {
-	d := net.Dialer{Timeout: time.Duration(s.cfg.CheckTimeoutSec) * time.Second}
-	var lastErr error
+	// All ports in parallel within one timeout budget: a silent host costs
+	// one timeout, not one per port.
+	ctx, cancel := context.WithTimeout(ctx, time.Duration(s.cfg.CheckTimeoutSec)*time.Second)
+	defer cancel()
+	type res struct {
+		port int
+		err  error
+	}
+	out := make(chan res, len(ports))
 	for _, p := range ports {
-		conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(p)))
+		go func() {
+			var d net.Dialer
+			conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(p)))
+			if err == nil {
+				conn.Close()
+			}
+			out <- res{p, err}
+		}()
+	}
+	var lastErr error
+	for range ports {
+		r := <-out
 		now := s.now().UTC()
-		if err == nil {
-			conn.Close()
-			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, reason: fmt.Sprintf("Отвечает на TCP-порт %d", p)}
-		}
-		if errors.Is(err, syscall.ECONNREFUSED) {
+		switch {
+		case r.err == nil:
+			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, reason: fmt.Sprintf("Отвечает на TCP-порт %d", r.port)}
+		case errors.Is(r.err, syscall.ECONNREFUSED):
 			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now,
-				reason: fmt.Sprintf("Хост в сети (порт %d закрыт, но ответил отказом)", p)}
-		}
-		if isDNSError(err) {
+				reason: fmt.Sprintf("Хост в сети (порт %d закрыт, но ответил отказом)", r.port)}
+		case isDNSError(r.err):
 			return observation{status: StatusUnknown, kind: "tcp", reason: "Не удалось разрешить имя хоста (DNS)"}
 		}
-		lastErr = err
-		if ctx.Err() != nil {
-			break
-		}
+		lastErr = r.err
 	}
 	ps := make([]string, len(ports))
 	for i, p := range ports {

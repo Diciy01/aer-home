@@ -148,6 +148,7 @@ class QuickCard extends StatelessWidget {
     required this.onClose,
     required this.onOpen,
     required this.onProperties,
+    this.onDiagnostics,
   });
 
   final ObjectGeometry geometry;
@@ -156,6 +157,7 @@ class QuickCard extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback? onOpen;
   final VoidCallback onProperties;
+  final VoidCallback? onDiagnostics;
 
   @override
   Widget build(BuildContext context) {
@@ -217,6 +219,19 @@ class QuickCard extends StatelessWidget {
               p.note,
               style: text.bodySmall?.copyWith(color: AerColors.inkMuted),
             ),
+            if (p.live case final live?) ...[
+              const SizedBox(height: AerSpacing.xs),
+              Text(
+                [
+                  if (live.lastContactAt != null)
+                    'Последний контакт: ${formatAge(live.lastContactAt, DateTime.now())}',
+                  if (live.openIncidents > 0)
+                    'Активных инцидентов: ${live.openIncidents}',
+                ].join(' · '),
+                key: const Key('quick-card-live'),
+                style: text.bodySmall,
+              ),
+            ],
             if (caps.isNotEmpty) ...[
               const SizedBox(height: AerSpacing.s),
               Wrap(
@@ -251,6 +266,13 @@ class QuickCard extends StatelessWidget {
                     onPressed: onOpen,
                     icon: const Icon(Icons.open_in_new_rounded, size: 16),
                     label: const Text('Подробнее'),
+                  ),
+                if (onDiagnostics != null)
+                  FilledButton.tonalIcon(
+                    key: const Key('scene-open-diagnostics'),
+                    onPressed: onDiagnostics,
+                    icon: const Icon(Icons.monitor_heart_outlined, size: 16),
+                    label: const Text('Диагностика'),
                   ),
                 OutlinedButton(
                   onPressed: onProperties,
@@ -334,8 +356,8 @@ class SceneLegend extends StatelessWidget {
               ),
               const SizedBox(height: AerSpacing.s),
               Text(
-                'Реальные состояния появятся с модулем Monitoring. Объекты, привязанные к Registry, '
-                'до этого показывают «Неизвестно».',
+                'Состояния привязанных объектов приходят из модуля Monitoring. Нет данных — «Неизвестно»; '
+                'без связи с Core показывается последнее известное состояние бледным значком.',
                 style: text.bodySmall?.copyWith(color: AerColors.inkMuted),
               ),
             ],
