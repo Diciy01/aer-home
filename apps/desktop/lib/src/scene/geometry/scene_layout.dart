@@ -108,20 +108,11 @@ class SceneLayout {
       final asset = doc.asset(o.assetId);
       final room = doc.room(o.roomId);
       if (asset == null || room == null) continue;
-      final fp = o.footprint(asset);
-      final x = room.origin.x + o.position.x, y = room.origin.y + o.position.y;
       objects[o.id] = ObjectGeometry(
         object: o,
         asset: asset,
         room: room,
-        box: Box3(
-          x,
-          y,
-          o.position.z,
-          x + fp.w,
-          y + fp.d,
-          o.position.z + asset.height * o.scale,
-        ),
+        box: boxOf(o, asset, room),
       );
     }
 
@@ -164,6 +155,21 @@ class SceneLayout {
     return SceneLayout._(doc, rooms, floorObjects, order, objects, bounds);
   }
 
+  /// World box of an object: room origin + local position, rotated and
+  /// scaled footprint, scaled height. The one place this mapping lives.
+  static Box3 boxOf(SceneObject o, SceneAsset asset, SceneRoom room) {
+    final fp = o.footprint(asset);
+    final x = room.origin.x + o.position.x, y = room.origin.y + o.position.y;
+    return Box3(
+      x,
+      y,
+      o.position.z,
+      x + fp.w,
+      y + fp.d,
+      o.position.z + asset.height * o.scale,
+    );
+  }
+
   final SceneDocument document;
   final List<RoomGeometry> rooms;
   final List<ObjectGeometry> floorObjects;
@@ -193,6 +199,20 @@ class SceneLayout {
               pointInConvex(geometry.silhouette, world)) {
             return geometry;
           }
+      }
+    }
+    return null;
+  }
+
+  /// Like [hitTest], but floor decor (rugs) is selectable too: the editor
+  /// must reach every object, the viewer ignores rugs.
+  ObjectGeometry? hitTestEditable(Offset world) {
+    final hit = hitTest(world);
+    if (hit != null) return hit;
+    for (final g in floorObjects.reversed) {
+      if (g.screenBounds.contains(world) &&
+          pointInConvex(g.silhouette, world)) {
+        return g;
       }
     }
     return null;

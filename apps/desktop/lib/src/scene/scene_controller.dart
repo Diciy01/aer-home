@@ -7,6 +7,7 @@ import '../core_api/registry_api.dart';
 import '../core_api/registry_models.dart';
 import '../state/connection_controller.dart';
 import 'binding/scene_binding.dart';
+import 'editor/draft_store.dart';
 import 'geometry/scene_layout.dart';
 import 'model/scene_document.dart';
 import 'repository/scene_repository.dart';
@@ -38,7 +39,9 @@ class SceneController extends ChangeNotifier {
     required Future<SceneDocument> Function() bundledLoader,
     String Function(String type)? typeLabel,
     String Function(String capability)? capabilityLabel,
+    SceneDraftStore? draftStore,
   }) : _api = sceneApi,
+       drafts = draftStore ?? SceneDraftStore.besideCache(sceneCache.file),
        _registry = registryApi,
        _connection = connectionController,
        _cache = sceneCache,
@@ -50,6 +53,9 @@ class SceneController extends ChangeNotifier {
   }
 
   final SceneApi _api;
+
+  /// Local editor draft storage (next to the offline cache).
+  final SceneDraftStore drafts;
   final RegistryApi _registry;
   final ConnectionController _connection;
   final SceneCache _cache;
@@ -58,7 +64,13 @@ class SceneController extends ChangeNotifier {
   final String Function(String) _capabilityLabel;
 
   SceneDocument? _document;
+
+  /// The document as last loaded or saved (what Core/cache hold). Differs
+  /// from [_document] while the editor shows a working copy.
+  SceneDocument? _saved;
   SceneLayout? _layout;
+  bool _editing = false;
+  String? _preferredSceneId;
   SceneSource _source = SceneSource.none;
   int? _revision;
   DateTime? _cachedAt;
@@ -73,6 +85,11 @@ class SceneController extends ChangeNotifier {
   Future<void>? _inFlight;
 
   SceneDocument? get document => _document;
+  SceneDocument? get savedDocument => _saved;
+
+  /// True while the editor owns the displayed document: reconnects refresh
+  /// bindings but never replace the working copy.
+  bool get editing => _editing;
   SceneLayout? get layout => _layout;
   SceneSource get source => _source;
   int? get revision => _revision;
@@ -104,6 +121,10 @@ class SceneController extends ChangeNotifier {
       }
       return;
     }
+    if (cameBack && _editing) {
+      unawaited(refreshBindings());
+      return;
+    }
     if (cameBack &&
         (_source != SceneSource.core || _link != RegistryLink.live)) {
       unawaited(load());
@@ -123,8 +144,13 @@ class SceneController extends ChangeNotifier {
       if (_connection.canAct) {
         try {
           final scenes = await _api.list();
+          _preferredSceneId ??=
+              _document?.sceneId ?? (await _cache.read())?.document.sceneId;
           if (scenes.isNotEmpty) {
-            final stored = await _api.get(scenes.first.id);
+            final pick =
+                scenes.where((s) => s.id == _preferredSceneId).firstOrNull ??
+                scenes.first;
+            final stored = await _api.get(pick.id);
             _install(
               stored.document,
               SceneSource.core,
@@ -167,6 +193,8 @@ class SceneController extends ChangeNotifier {
 
   void _install(SceneDocument doc, SceneSource source, {int? revision}) {
     _document = doc;
+    _saved = doc;
+    _preferredSceneId = doc.sceneId;
     _layout = SceneLayout.build(doc);
     _source = source;
     _revision = revision;
@@ -235,7 +263,8 @@ class SceneController extends ChangeNotifier {
   );
 
   Future<void> _writeCache() async {
-    final doc = _document;
+    // Only saved states go to the offline cache, never an editor draft.
+    final doc = _saved;
     if (doc == null || _source == SceneSource.cache) return;
     try {
       await _cache.write(doc, _revision, _snapshots);
@@ -245,16 +274,73 @@ class SceneController extends ChangeNotifier {
     }
   }
 
-  /// Saves the current document to Core: creates it the first time (bundled
-  /// demo), otherwise replaces it with optimistic locking.
-  Future<void> save() async {
+  /// Shows an editor working copy. Nothing is persisted; new bindings are
+  /// resolved through Registry when Core is reachable.
+  void previewDocument(SceneDocument doc) {
+    _document = doc;
+    _layout = SceneLayout.build(doc);
+    final unknown = doc.boundEntityIds.difference(_snapshots.keys.toSet());
+    _recompute();
+    if (unknown.isNotEmpty && _connection.canAct) unawaited(refreshBindings());
+  }
+
+  void beginEditing() {
+    _editing = true;
+    _notify();
+  }
+
+  /// Leaves edit mode; with [restoreSaved] the last saved document is shown
+  /// again (unsaved edits discarded).
+  void endEditing({bool restoreSaved = false}) {
+    _editing = false;
+    final saved = _saved;
+    if (restoreSaved && saved != null && !identical(saved, _document)) {
+      _document = saved;
+      _layout = SceneLayout.build(saved);
+      _recompute();
+    } else {
+      _notify();
+    }
+  }
+
+  /// Stores the current document as a new scene (conflict resolution «save
+  /// as a separate copy»); the copy becomes the active scene.
+  Future<void> saveAsCopy({required String newSceneId}) async {
     final doc = _document;
     if (doc == null) return;
+    final name = '${doc.name} (копия)';
+    final copy = doc.copyWith(
+      sceneId: newSceneId,
+      name: name.runes.length > 120
+          ? String.fromCharCodes(name.runes.take(120))
+          : name,
+    );
     _saving = true;
     _notify();
     try {
-      final stored = _source == SceneSource.core && _revision != null
-          ? await _api.replace(doc.sceneId, _revision!, doc)
+      final stored = await _api.create(copy);
+      _install(stored.document, SceneSource.core, revision: stored.revision);
+      await _writeCache();
+    } finally {
+      _saving = false;
+      _recompute();
+    }
+  }
+
+  /// Saves the current document to Core: creates it the first time (bundled
+  /// demo), otherwise replaces it with optimistic locking. A stale revision
+  /// fails with a CONFLICT [CoreApiException]; nothing is overwritten.
+  /// [baseRevision] is the revision the edits started from (the editor
+  /// passes it, e.g. for a restored draft); defaults to the loaded revision.
+  Future<void> save({int? baseRevision}) async {
+    final doc = _document;
+    if (doc == null) return;
+    final rev = baseRevision ?? _revision;
+    _saving = true;
+    _notify();
+    try {
+      final stored = _source != SceneSource.bundled && rev != null
+          ? await _api.replace(doc.sceneId, rev, doc)
           : await _api.create(doc);
       _install(stored.document, SceneSource.core, revision: stored.revision);
       await _writeCache();

@@ -27,8 +27,9 @@ const _roomKinds = {
   'kitchen',
   'custom',
 };
-const _floors = {'oak', 'oak_warm', 'tile', 'carpet', 'concrete'};
-const _walls = {'cream', 'milk', 'sand', 'beige'};
+
+/// Material ids are data-defined (material catalog); only the shape is checked.
+final _materialId = RegExp(r'^[a-z][a-z0-9_]{0,31}$');
 const _eps = 1e-6;
 
 bool isUuid(String s) => _uuid.hasMatch(s);
@@ -160,11 +161,32 @@ class SceneCodec {
       if (!_roomKinds.contains(kind)) add('$p.kind', 'Неизвестный вид комнаты');
       final origin = r.obj('$p.origin', m['origin'], const {'x', 'y'});
       final size = r.obj('$p.size', m['size'], const {'w', 'd'});
-      final style = r.obj('$p.style', m['style'], const {'floor', 'wall'});
+      final style = r.obj(
+        '$p.style',
+        m['style'],
+        const {'floor', 'wall'},
+        optional: const {'light'},
+      );
       final floor = r.str('$p.style.floor', style['floor']);
       final wall = r.str('$p.style.wall', style['wall']);
-      if (!_floors.contains(floor)) add('$p.style.floor', 'Неизвестный пол');
-      if (!_walls.contains(wall)) add('$p.style.wall', 'Неизвестные стены');
+      final light = style['light'] == null
+          ? null
+          : r.str('$p.style.light', style['light']);
+      if (!_materialId.hasMatch(floor)) {
+        add(
+          '$p.style.floor',
+          'Идентификатор материала пола: a-z, цифры, _ (до 32)',
+        );
+      }
+      if (!_materialId.hasMatch(wall)) {
+        add(
+          '$p.style.wall',
+          'Идентификатор материала стен: a-z, цифры, _ (до 32)',
+        );
+      }
+      if (light != null && !_materialId.hasMatch(light)) {
+        add('$p.style.light', 'Идентификатор освещения: a-z, цифры, _ (до 32)');
+      }
       final room = SceneRoom(
         id: id,
         name: r.str('$p.name', m['name'], min: 1, max: 80),
@@ -178,7 +200,7 @@ class SceneCodec {
           r.num_('$p.size.d', size['d'], 1, 200),
         ),
         wallHeight: r.num_('$p.wallHeight', m['wallHeight'], 0, 20),
-        style: RoomStyle(floor: floor, wall: wall),
+        style: RoomStyle(floor: floor, wall: wall, light: light),
         metadata: r.meta('$p.metadata', m['metadata']),
       );
       for (final (j, other) in rooms.indexed) {
@@ -331,9 +353,14 @@ class _Reader {
   _Reader(this.add);
   final void Function(String, String) add;
 
-  void allowOnly(String p, Map<String, dynamic> m, Set<String> keys) {
+  void allowOnly(
+    String p,
+    Map<String, dynamic> m,
+    Set<String> keys, {
+    Set<String> optional = const {},
+  }) {
     for (final k in m.keys) {
-      if (!keys.contains(k)) {
+      if (!keys.contains(k) && !optional.contains(k)) {
         add(p.isEmpty ? k : '$p.$k', 'Поле не предусмотрено схемой v1');
       }
     }
@@ -380,12 +407,17 @@ class _Reader {
     return v;
   }
 
-  Map<String, dynamic> obj(String p, Object? v, Set<String> keys) {
+  Map<String, dynamic> obj(
+    String p,
+    Object? v,
+    Set<String> keys, {
+    Set<String> optional = const {},
+  }) {
     if (v is! Map<String, dynamic>) {
       add(p, 'Ожидается объект');
       return const {};
     }
-    allowOnly(p, v, keys);
+    allowOnly(p, v, keys, optional: optional);
     return v;
   }
 

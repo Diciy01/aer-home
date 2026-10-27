@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:aer_home_desktop/src/core_api/core_client.dart';
 import 'package:aer_home_desktop/src/core_api/registry_api.dart';
 import 'package:aer_home_desktop/src/scene/binding/scene_binding.dart';
+import 'package:aer_home_desktop/src/scene/editor/draft_store.dart';
 import 'package:aer_home_desktop/src/scene/model/scene_codec.dart';
 import 'package:aer_home_desktop/src/scene/model/scene_document.dart';
 import 'package:aer_home_desktop/src/scene/repository/scene_repository.dart';
@@ -117,6 +118,7 @@ SceneController sceneControllerFor({
   required RegistryApi registry,
   FakeSceneApi? api,
   Directory? dataDir,
+  SceneDraftStore? drafts,
 }) => SceneController(
   sceneApi: api ?? FakeSceneApi(),
   registryApi: registry,
@@ -125,4 +127,9 @@ SceneController sceneControllerFor({
       ? MemorySceneCache()
       : SceneCache(File('${dataDir.path}/scene-cache.json')),
   bundledLoader: () async => exampleScene(),
+  draftStore:
+      drafts ??
+      (dataDir == null
+          ? MemoryDraftStore()
+          : SceneDraftStore(File('${dataDir.path}/scene-draft.json'))),
 );

@@ -85,12 +85,39 @@ class SceneAsset {
   };
 }
 
+/// Material ids from the material catalog (data-defined, see
+/// `scene/catalog/`); [light] is an optional lighting preset.
 class RoomStyle {
-  const RoomStyle({required this.floor, required this.wall});
+  const RoomStyle({required this.floor, required this.wall, this.light});
   final String floor;
   final String wall;
+  final String? light;
 
-  Map<String, Object?> toJson() => {'floor': floor, 'wall': wall};
+  RoomStyle copyWith({
+    String? floor,
+    String? wall,
+    String? Function()? light,
+  }) => RoomStyle(
+    floor: floor ?? this.floor,
+    wall: wall ?? this.wall,
+    light: light != null ? light() : this.light,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is RoomStyle &&
+      other.floor == floor &&
+      other.wall == wall &&
+      other.light == light;
+
+  @override
+  int get hashCode => Object.hash(floor, wall, light);
+
+  Map<String, Object?> toJson() => {
+    'floor': floor,
+    'wall': wall,
+    if (light != null) 'light': light,
+  };
 }
 
 class SceneRoom {
@@ -115,14 +142,16 @@ class SceneRoom {
   final Map<String, String> metadata;
 
   SceneRoom copyWith({
+    String? id,
     String? name,
+    String? kind,
     Point2? origin,
     Size2? size,
     RoomStyle? style,
   }) => SceneRoom(
-    id: id,
+    id: id ?? this.id,
     name: name ?? this.name,
-    kind: kind,
+    kind: kind ?? this.kind,
     origin: origin ?? this.origin,
     size: size ?? this.size,
     wallHeight: wallHeight,
@@ -189,6 +218,7 @@ class SceneObject {
   }
 
   SceneObject copyWith({
+    String? id,
     String? roomId,
     Point3? position,
     int? rotation,
@@ -197,8 +227,9 @@ class SceneObject {
     EntityBinding? Function()? entityBinding,
     SceneStatus? Function()? demoState,
     String? label,
+    Map<String, String>? metadata,
   }) => SceneObject(
-    id: id,
+    id: id ?? this.id,
     roomId: roomId ?? this.roomId,
     assetId: assetId,
     label: label ?? this.label,
@@ -208,7 +239,7 @@ class SceneObject {
     layer: layer ?? this.layer,
     entityBinding: entityBinding != null ? entityBinding() : this.entityBinding,
     demoState: demoState != null ? demoState() : this.demoState,
-    metadata: metadata,
+    metadata: metadata ?? this.metadata,
   );
 
   Map<String, Object?> toJson() => {
@@ -271,6 +302,7 @@ class SceneDocument {
   };
 
   SceneDocument copyWith({
+    String? sceneId,
     String? name,
     List<SceneRoom>? rooms,
     List<SceneObject>? objects,
@@ -278,7 +310,7 @@ class SceneDocument {
     bool? demo,
   }) => SceneDocument(
     schemaVersion: schemaVersion,
-    sceneId: sceneId,
+    sceneId: sceneId ?? this.sceneId,
     name: name ?? this.name,
     demo: demo ?? this.demo,
     projection: projection,

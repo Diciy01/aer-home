@@ -1,10 +1,9 @@
 import 'scene_codec.dart';
 import 'scene_document.dart';
 
-/// Pure scene edit operations for the future M04 editor. Each returns a new
-/// validated document (or throws [SceneFormatException]) and never mutates
-/// its input, so undo/redo is "keep the previous document". No UI uses these
-/// in M03: the viewer is read-only.
+/// Pure scene edit operations (used by the M04 editor commands). Each returns
+/// a new validated document (or throws [SceneFormatException]) and never
+/// mutates its input, so undo/redo is "keep the previous document".
 class SceneEdits {
   const SceneEdits([this._codec = const SceneCodec()]);
   final SceneCodec _codec;
@@ -30,6 +29,39 @@ class SceneEdits {
       ],
     ),
   );
+
+  /// Adds a room together with its objects in one validated step.
+  SceneDocument addRoomWithObjects(
+    SceneDocument doc,
+    SceneRoom room,
+    List<SceneObject> objects,
+  ) => _checked(
+    doc.copyWith(
+      rooms: [...doc.rooms, room],
+      objects: [...doc.objects, ...objects],
+    ),
+  );
+
+  /// Generic room change (rename, move, resize, style, kind).
+  SceneDocument updateRoom(
+    SceneDocument doc,
+    String roomId,
+    SceneRoom Function(SceneRoom) fn,
+  ) => _replaceRoom(doc, roomId, fn);
+
+  /// Declares [asset] if the document does not have it yet. An existing
+  /// declaration is kept as is (documents are self-contained).
+  SceneDocument declareAsset(SceneDocument doc, SceneAsset asset) =>
+      doc.asset(asset.id) != null
+      ? doc
+      : doc.copyWith(assets: [...doc.assets, asset]);
+
+  /// Generic object change (move, rotate, scale, label, metadata).
+  SceneDocument updateObject(
+    SceneDocument doc,
+    String objectId,
+    SceneObject Function(SceneObject) fn,
+  ) => _replaceObject(doc, objectId, fn);
 
   SceneDocument resizeRoom(SceneDocument doc, String roomId, Size2 size) =>
       _replaceRoom(doc, roomId, (r) => r.copyWith(size: size));

@@ -165,6 +165,7 @@ class SceneCache {
       try {
         await file.rename(aside.path);
       } catch (_) {}
+      await pruneCorruptCopies(file, keep: 3);
       lastIssue =
           'Локальная копия сцены повреждена и отложена в ${aside.path}: $e';
       return null;
@@ -198,3 +199,22 @@ Future<SceneDocument> loadBundledDemo([
 ]) async => codec.decodeString(
   await rootBundle.loadString('assets/scenes/demo_home.scene.json'),
 );
+
+/// Keeps only the newest [keep] `<file>.corrupt-<ms>` copies next to [file],
+/// so repeated corruption cannot fill the disk with backups.
+Future<void> pruneCorruptCopies(File file, {int keep = 3}) async {
+  final dir = file.parent;
+  if (!await dir.exists()) return;
+  final prefix = '${file.uri.pathSegments.last}.corrupt-';
+  final aside = <File>[
+    await for (final e in dir.list())
+      if (e is File && e.uri.pathSegments.last.startsWith(prefix)) e,
+  ]..sort((a, b) => b.path.compareTo(a.path));
+  for (final f in aside.skip(keep)) {
+    try {
+      await f.delete();
+    } on FileSystemException {
+      // Best effort.
+    }
+  }
+}
