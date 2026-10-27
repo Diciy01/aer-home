@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.6.0
+  version: 0.7.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -21,6 +21,10 @@ info:
     notifications, agent credentials, Docker; agent protocol POST /monitoring/agent/report with
     per-agent credentials (agentAuth). The draft /incidents path and Incident schema are replaced.
     See docs/adr/ADR-011-monitoring.md.
+    0.7.0 — Bots (M06) under /bots: bot configs on top of Registry entities, live state from
+    Monitoring, jobs, logs, actions with single-use confirmation + Idempotency-Key + audit, adapters;
+    bot protocol POST /bots/agent/jobs (agentAuth, kind=bot). BotStatus gains `version`. Additive.
+    See docs/adr/ADR-012-bots.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -683,6 +687,369 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /bots/adapters:
+    get:
+      x-aer-status: implemented
+      summary: "Registered bot adapters with their configured instances (no paths or secrets)"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BotAdapter' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /bots:
+    get:
+      x-aer-status: implemented
+      summary: "Bots with live state (Registry + bot config + Monitoring)"
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "Words in name, description, tags, category, runtime" }
+        - { name: status, in: query, required: false, schema: { $ref: '#/components/schemas/MonitoringStatus' }, description: "" }
+        - { name: runtime, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: category, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: archived, in: query, required: false, schema: { type: string, enum: ['false', 'true', all] }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Bot' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: "Add a bot: creates (or links) a Registry entity and its bot config; optional heartbeat token returned once"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewBot' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CreatedBot' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /bots/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+    get:
+      x-aer-status: implemented
+      summary: "Full bot page: state, heartbeat, runtime, jobs summary, dependencies, crashes, restarts, actions, integration"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      x-aer-status: implemented
+      summary: "Edit bot config and the Registry fields it shows (optimistic revision of the bot config)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BotPatch' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /bots/{id}/archive:
+    post:
+      x-aer-status: implemented
+      summary: "Archive the bot's Registry entity (stops nothing)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bots/{id}/restore:
+    post:
+      x-aer-status: implemented
+      summary: "Restore an archived bot"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotDetail' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bots/{id}/credentials:
+    post:
+      x-aer-status: implemented
+      summary: "Issue a heartbeat credential (kind=bot) for the bot; the token is returned once"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CreatedAgent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bots/{id}/jobs:
+    get:
+      x-aer-status: implemented
+      summary: "Job history, newest first (cursor pagination)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: status, in: query, required: false, schema: { $ref: '#/components/schemas/BotJobStatus' }, description: "" }
+        - { name: before, in: query, required: false, schema: { type: string }, description: "nextBefore of the previous page" }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200 }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotJobPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /bots/{id}/logs:
+    get:
+      x-aer-status: implemented
+      summary: "The bot's slice of Monitoring logs (redacted)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: level, in: query, required: false, schema: { $ref: '#/components/schemas/LogLevel' }, description: "Minimum level" }
+        - { name: q, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: before, in: query, required: false, schema: { type: integer }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/LogPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /bots/{id}/activity:
+    get:
+      x-aer-status: implemented
+      summary: "Event history of the bot (Monitoring events)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: before, in: query, required: false, schema: { type: integer }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MonitoringEvent' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bots/{id}/actions:
+    get:
+      x-aer-status: implemented
+      summary: "Actions and whether each can be requested now (with the reason when not)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BotAction' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /bots/{id}/actions/{action}/confirm:
+    post:
+      x-aer-status: implemented
+      summary: "Get a single-use confirmation token (summary, risks, expiry) for one action"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [start, stop, restart, check, job.retry] }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BotConfirmRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotConfirmation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '403':
+          description: "PERMISSION_REQUIRED (action not allowed by the adapter config, or no valid confirmation) or FORBIDDEN"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /bots/{id}/actions/{action}:
+    post:
+      x-aer-status: implemented
+      summary: "Run an action once per Idempotency-Key; a repeated key returns the first result (replayed=true)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [start, stop, restart, check, job.retry] }, description: "" }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 100 }, description: "One key per user intent" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BotActionRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/BotActionRecord' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '403':
+          description: "PERMISSION_REQUIRED (action not allowed by the adapter config, or no valid confirmation) or FORBIDDEN"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /bots/{id}/audit:
+    get:
+      x-aer-status: implemented
+      summary: "Audit of requested actions (executed, failed, refused)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "Bot (Registry entity) UUID" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/BotActionRecord' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /bots/agent/jobs:
+    post:
+      x-aer-status: implemented
+      summary: "Bot protocol: report jobs with the bot's heartbeat credential; the entity comes from the credential"
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BotJobReport' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [accepted], properties: { accepted: { type: integer } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "PERMISSION_REQUIRED (action not allowed by the adapter config, or no valid confirmation) or FORBIDDEN"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -1058,6 +1425,7 @@ components:
         lastRestartAt: { type: [string, 'null'], format: date-time }
         startedAt: { type: [string, 'null'], format: date-time }
         apiOk: { type: [boolean, 'null'] }
+        version: { type: string, maxLength: 60, description: the bot's own version }
     Agent:
       type: object
       required: [id, entityId, name, kind, createdAt, revokedAt, lastSeenAt, info, bot, active]
@@ -1314,3 +1682,317 @@ components:
         droppedLogs: { type: integer }
         serverTime: { type: string, format: date-time }
         intervalSec: { type: integer }
+    BotJobStatus: { type: string, enum: [pending, running, success, failed, cancelled] }
+    BotRuntime: { type: string, enum: [python, docker, telegram, n8n, service, custom] }
+    BotEntityRef:
+      type: object
+      required: [id, name, type]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        relation: { type: string }
+        status: { $ref: '#/components/schemas/MonitoringStatus' }
+        reason: { type: string }
+    BotHeartbeat:
+      type: object
+      required: [credentials, active, lastSeenAt, intervalSec, timeoutSec, library]
+      properties:
+        credentials: { type: integer }
+        active: { type: boolean }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        intervalSec: { type: integer }
+        timeoutSec: { type: integer }
+        library: { type: string, description: version of the heartbeat client }
+    BotRuntimeState:
+      type: object
+      required: [adapter, state, since, reason]
+      description: "running means the process/container exists, not that the bot works"
+      properties:
+        adapter: { type: string }
+        state: { type: string, enum: [running, stopped, starting, unknown, unavailable] }
+        pid: { type: integer }
+        since: { type: [string, 'null'], format: date-time }
+        reason: { type: string }
+    BotJob:
+      type: object
+      required: [id, entityId, externalId, name, status, source, startedAt, finishedAt, durationMs, result, error, retryable, retryOf]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        externalId: { type: string }
+        name: { type: string }
+        status: { $ref: '#/components/schemas/BotJobStatus' }
+        source: { type: string, enum: [heartbeat, n8n] }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        durationMs: { type: [integer, 'null'] }
+        result: { type: string }
+        error: { type: string }
+        retryable: { type: boolean }
+        retryOf: { type: string }
+    BotJobPage:
+      type: object
+      required: [items, nextBefore, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/BotJob' } }
+        nextBefore: { type: [string, 'null'] }
+        total: { type: integer }
+    BotJobCounts:
+      type: object
+      properties:
+        success24h: { type: integer }
+        failed24h: { type: integer }
+        running: { type: integer }
+    Bot:
+      type: object
+      required: [entityId, runtime, category, controllerId, n8nInstanceId, n8nWorkflowIds, telegramTokenId, container,
+        heartbeatIntervalSec, heartbeatTimeoutSec, logSource, notes, revision, createdAt, updatedAt,
+        name, type, description, tags, archived, entityRevision, host, status, statusReason, lastContactAt, openIncidents,
+        heartbeat, version, startedAt, uptimeSec, lastError, lastErrorAt, lastSuccessAt, apiOk, cpuPercent, memBytes,
+        runtimeState, lastJobOk, lastJobFailed, jobs]
+      properties:
+        entityId: { type: string, format: uuid }
+        runtime: { $ref: '#/components/schemas/BotRuntime' }
+        category: { type: string }
+        controllerId: { type: string, description: id of a controller declared in Core config; empty = monitoring only }
+        n8nInstanceId: { type: string }
+        n8nWorkflowIds: { type: array, items: { type: string } }
+        telegramTokenId: { type: string, description: id of a token file declared in Core config (never the token) }
+        container: { type: string }
+        heartbeatIntervalSec: { type: integer }
+        heartbeatTimeoutSec: { type: integer }
+        logSource: { type: string, enum: [heartbeat, controller, docker, n8n, none] }
+        notes: { type: string }
+        revision: { type: integer, description: bot config revision (optimistic locking) }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        name: { type: string }
+        type: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        archived: { type: boolean }
+        entityRevision: { type: integer }
+        host: { oneOf: [{ $ref: '#/components/schemas/BotEntityRef' }, { type: 'null' }] }
+        status: { $ref: '#/components/schemas/MonitoringStatus' }
+        statusReason: { type: string }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        openIncidents: { type: integer }
+        heartbeat: { $ref: '#/components/schemas/BotHeartbeat' }
+        version: { type: string }
+        startedAt: { type: [string, 'null'], format: date-time }
+        uptimeSec: { type: [integer, 'null'] }
+        lastError: { type: string }
+        lastErrorAt: { type: [string, 'null'], format: date-time }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        apiOk: { type: [boolean, 'null'] }
+        cpuPercent: { type: [number, 'null'] }
+        memBytes: { type: [number, 'null'] }
+        runtimeState: { oneOf: [{ $ref: '#/components/schemas/BotRuntimeState' }, { type: 'null' }] }
+        lastJobOk: { oneOf: [{ $ref: '#/components/schemas/BotJob' }, { type: 'null' }] }
+        lastJobFailed: { oneOf: [{ $ref: '#/components/schemas/BotJob' }, { type: 'null' }] }
+        jobs: { $ref: '#/components/schemas/BotJobCounts' }
+    BotDetail:
+      type: object
+      required: [entityId, name, status, dependencies, crashes, restarts, actions, integration]
+      properties:
+        entityId: { type: string, format: uuid }
+        runtime: { $ref: '#/components/schemas/BotRuntime' }
+        category: { type: string }
+        controllerId: { type: string, description: id of a controller declared in Core config; empty = monitoring only }
+        n8nInstanceId: { type: string }
+        n8nWorkflowIds: { type: array, items: { type: string } }
+        telegramTokenId: { type: string, description: id of a token file declared in Core config (never the token) }
+        container: { type: string }
+        heartbeatIntervalSec: { type: integer }
+        heartbeatTimeoutSec: { type: integer }
+        logSource: { type: string, enum: [heartbeat, controller, docker, n8n, none] }
+        notes: { type: string }
+        revision: { type: integer, description: bot config revision (optimistic locking) }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        name: { type: string }
+        type: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        archived: { type: boolean }
+        entityRevision: { type: integer }
+        host: { oneOf: [{ $ref: '#/components/schemas/BotEntityRef' }, { type: 'null' }] }
+        status: { $ref: '#/components/schemas/MonitoringStatus' }
+        statusReason: { type: string }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        openIncidents: { type: integer }
+        heartbeat: { $ref: '#/components/schemas/BotHeartbeat' }
+        version: { type: string }
+        startedAt: { type: [string, 'null'], format: date-time }
+        uptimeSec: { type: [integer, 'null'] }
+        lastError: { type: string }
+        lastErrorAt: { type: [string, 'null'], format: date-time }
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        apiOk: { type: [boolean, 'null'] }
+        cpuPercent: { type: [number, 'null'] }
+        memBytes: { type: [number, 'null'] }
+        runtimeState: { oneOf: [{ $ref: '#/components/schemas/BotRuntimeState' }, { type: 'null' }] }
+        lastJobOk: { oneOf: [{ $ref: '#/components/schemas/BotJob' }, { type: 'null' }] }
+        lastJobFailed: { oneOf: [{ $ref: '#/components/schemas/BotJob' }, { type: 'null' }] }
+        jobs: { $ref: '#/components/schemas/BotJobCounts' }
+        dependencies: { type: array, items: { $ref: '#/components/schemas/BotEntityRef' } }
+        crashes: { type: array, items: { $ref: '#/components/schemas/Incident' }, description: availability/process/container/n8n incidents }
+        restarts: { type: array, items: { $ref: '#/components/schemas/MonitoringEvent' } }
+        actions: { type: array, items: { $ref: '#/components/schemas/BotAction' } }
+        integration: { oneOf: [{ $ref: '#/components/schemas/BotIntegration' }, { type: 'null' }] }
+    BotIntegration:
+      type: object
+      required: [kind, label, status, reason, checkedAt]
+      properties:
+        kind: { type: string, enum: [n8n, telegram] }
+        label: { type: string }
+        status: { type: string, enum: [ok, unavailable, disabled, unknown] }
+        reason: { type: string }
+        checkedAt: { type: [string, 'null'], format: date-time }
+        workflows:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              active: { type: boolean }
+    NewBot:
+      type: object
+      additionalProperties: false
+      description: "Either entityId (link an existing entity) or name+type (create one)"
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string, enum: [telegram_bot, process, service, automation, application, docker_container] }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        hostId: { type: string, format: uuid, description: creates a runs_on relation }
+        dependsOn: { type: array, maxItems: 20, items: { type: string, format: uuid } }
+        runtime: { $ref: '#/components/schemas/BotRuntime' }
+        category: { type: string, maxLength: 40 }
+        controllerId: { type: string }
+        n8nInstanceId: { type: string }
+        n8nWorkflowIds: { type: array, items: { type: string } }
+        telegramTokenId: { type: string }
+        container: { type: string }
+        heartbeatIntervalSec: { type: integer, minimum: 5, maximum: 3600 }
+        heartbeatTimeoutSec: { type: integer, minimum: 10, maximum: 86400 }
+        logSource: { type: string, enum: [heartbeat, controller, docker, n8n, none] }
+        notes: { type: string, maxLength: 1000 }
+        createCredential: { type: boolean }
+    BotPatch:
+      type: object
+      additionalProperties: false
+      required: [revision]
+      properties:
+        revision: { type: integer }
+        name: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        hostId: { type: string, description: empty string removes the runs_on relation }
+        dependsOn: { type: array, items: { type: string, format: uuid } }
+        runtime: { $ref: '#/components/schemas/BotRuntime' }
+        category: { type: string }
+        controllerId: { type: string }
+        n8nInstanceId: { type: string }
+        n8nWorkflowIds: { type: array, items: { type: string } }
+        telegramTokenId: { type: string }
+        container: { type: string }
+        heartbeatIntervalSec: { type: integer }
+        heartbeatTimeoutSec: { type: integer }
+        logSource: { type: string }
+        notes: { type: string }
+    CreatedBot:
+      type: object
+      required: [bot]
+      properties:
+        bot: { $ref: '#/components/schemas/BotDetail' }
+        heartbeatToken: { type: string, description: shown once; store it in a 0600 file for the bot }
+    BotAction:
+      type: object
+      required: [id, label, available, reason, confirm, risk]
+      properties:
+        id: { type: string, enum: [start, stop, restart, check, job.retry] }
+        label: { type: string }
+        available: { type: boolean }
+        reason: { type: string }
+        confirm: { type: boolean }
+        risk: { type: string }
+    BotConfirmRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        jobId: { type: string, description: for job.retry }
+    BotConfirmation:
+      type: object
+      required: [token, entityId, action, summary, risks, expiresAt]
+      properties:
+        token: { type: string }
+        entityId: { type: string, format: uuid }
+        action: { type: string }
+        jobId: { type: string }
+        summary: { type: string }
+        risks: { type: array, items: { type: string } }
+        expiresAt: { type: string, format: date-time }
+    BotActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        confirmationToken: { type: string, description: required for every action except check }
+        jobId: { type: string }
+    BotActionRecord:
+      type: object
+      required: [id, entityId, action, jobId, adapter, status, message, idempotencyKey, requestedAt, finishedAt, replayed]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        action: { type: string }
+        jobId: { type: string }
+        adapter: { type: string }
+        status: { type: string, enum: [running, succeeded, failed, rejected] }
+        message: { type: string }
+        idempotencyKey: { type: string }
+        requestedAt: { type: string, format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        replayed: { type: boolean }
+    BotAdapter:
+      type: object
+      required: [id, label, description, capabilities, status, reason, instances]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        description: { type: string }
+        capabilities: { type: array, items: { type: string, enum: [monitor, logs, control, jobs, retry, check] } }
+        status: { type: string, enum: [ok, unavailable, disabled] }
+        reason: { type: string }
+        instances:
+          type: array
+          items:
+            type: object
+            required: [id, label, target]
+            properties:
+              id: { type: string }
+              label: { type: string }
+              target: { type: string }
+              allow: { type: array, items: { type: string } }
+              usedBy: { type: string }
+    BotJobReport:
+      type: object
+      additionalProperties: false
+      properties:
+        jobs:
+          type: array
+          maxItems: 200
+          items:
+            type: object
+            required: [id, name, status]
+            properties:
+              id: { type: string, maxLength: 80, description: the bot's own job id; repeated reports update the job }
+              name: { type: string, maxLength: 120 }
+              status: { $ref: '#/components/schemas/BotJobStatus' }
+              startedAt: { type: string, format: date-time }
+              finishedAt: { type: string, format: date-time }
+              result: { type: string }
+              error: { type: string }

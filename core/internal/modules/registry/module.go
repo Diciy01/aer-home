@@ -27,3 +27,7 @@ func (m *Module) Migrations() []storage.Migration { return migrations }
 
 // Service exposes the Registry to other modules through the Reader interface.
 func (m *Module) Service() Reader { return m.svc }
+
+// Writer exposes the full service to modules that create entities on the
+// owner's behalf (Bots, M06); all Registry validation still applies.
+func (m *Module) Writer() *Service { return m.svc }

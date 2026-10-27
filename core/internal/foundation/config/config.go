@@ -36,6 +36,8 @@ type Config struct {
 	Modules map[string]bool `json:"modules,omitempty"`
 	// Monitoring configures the Monitoring module (M05).
 	Monitoring Monitoring `json:"monitoring"`
+	// Bots configures the Bots module (M06): management adapters and integrations.
+	Bots Bots `json:"bots"`
 }
 
 // EnvLookup matches os.LookupEnv so tests can inject an isolated environment.
@@ -50,6 +52,7 @@ func Default(env EnvLookup) Config {
 		LogLevel:   "info",
 		LogFormat:  "text",
 		Monitoring: DefaultMonitoring(),
+		Bots:       DefaultBots(),
 	}
 }
 
@@ -121,6 +124,9 @@ func (c Config) Validate() error {
 		errs = append(errs, fmt.Errorf("logFormat %q: want text or json", c.LogFormat))
 	}
 	if err := c.Monitoring.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Bots.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

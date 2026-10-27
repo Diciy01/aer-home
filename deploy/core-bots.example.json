@@ -1,0 +1,53 @@
+{
+  "mode": "server",
+  "listenAddr": "127.0.0.1:8787",
+  "dataDir": "/var/lib/aer-home/core",
+  "bots": {
+    "controllers": [
+      {
+        "id": "example-bot",
+        "label": "Пример: бот на Python",
+        "kind": "process",
+        "command": ["/usr/bin/python3", "-u", "/opt/bots/example/bot.py"],
+        "workDir": "/opt/bots/example",
+        "env": ["LANG=C.UTF-8"],
+        "stopTimeoutSec": 10,
+        "allow": ["start", "stop", "restart"]
+      },
+      {
+        "id": "news-bot-unit",
+        "label": "Пример: юнит systemd --user",
+        "kind": "systemd_user",
+        "unit": "news-bot.service",
+        "allow": ["restart"]
+      },
+      {
+        "id": "shop-bot-container",
+        "label": "Пример: контейнер",
+        "kind": "docker",
+        "container": "shop-bot",
+        "allow": ["restart"]
+      }
+    ],
+    "n8n": [
+      {
+        "id": "home",
+        "label": "n8n дома",
+        "baseUrl": "http://127.0.0.1:5678",
+        "apiKeyFile": "/etc/aer-home/n8n.key",
+        "allowRetry": false
+      }
+    ],
+    "telegramTokens": [
+      { "id": "news-bot", "file": "/etc/aer-home/news-bot.token" }
+    ],
+    "dockerSocket": "/var/run/docker.sock",
+    "maxConcurrentOps": 2,
+    "opTimeoutSec": 30,
+    "syncIntervalSec": 60,
+    "confirmTtlSec": 120,
+    "jobRetentionDays": 90,
+    "jobMaxRows": 200000,
+    "auditRetentionDays": 365
+  }
+}
