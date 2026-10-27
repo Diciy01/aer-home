@@ -22,7 +22,10 @@ grdctl --headless rdp set-port "$PORT"; grdctl --headless rdp disable-port-negot
 grdctl --headless rdp set-tls-cert "$D/tls.crt"; grdctl --headless rdp set-tls-key "$D/tls.key"
 grdctl --headless rdp disable-view-only
 grdctl --headless rdp disable          # AER agent enables it per session
-/usr/libexec/gnome-remote-desktop-daemon --headless > "$D/grd.log" 2>&1 &
+# AER_LAB_DAEMON=1 starts the RDP daemon here (raw feasibility tests); with
+# aer-remote-host the agent starts it per session (credentials are read only
+# at daemon start).
+[ "$AER_LAB_DAEMON" = 1 ] && /usr/libexec/gnome-remote-desktop-daemon --headless > "$D/grd.log" 2>&1 &
 echo "$DBUS_SESSION_BUS_ADDRESS" > "$D/bus"
 wait
 INNER
