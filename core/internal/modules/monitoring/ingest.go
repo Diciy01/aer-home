@@ -69,6 +69,9 @@ func (r *Report) validate(now time.Time) error {
 	if len(r.Agent.Version) > 40 || len(r.Agent.OS) > 40 || len(r.Agent.OSVersion) > 120 || len(r.Agent.Hostname) > 120 || len(r.Agent.Collectors) > 64 {
 		v.add("agent", "Слишком длинные сведения об агенте")
 	}
+	if r.Bot != nil && (len(r.Bot.Version) > 60 || len(r.Bot.LastError) > 2000) {
+		v.add("bot", "bot.version до 60 символов, bot.lastError до 2000")
+	}
 	earliest, latest := now.Add(-24*time.Hour), now.Add(5*time.Minute)
 	for i, sm := range r.Samples {
 		p := fmt.Sprintf("samples[%d]", i)
@@ -132,6 +135,10 @@ func (s *Service) Ingest(ctx context.Context, a Agent, r Report) (ReportResult, 
 	defer tx.Rollback()
 
 	info, _ := json.Marshal(r.Agent)
+	restarted := false
+	if r.Bot != nil && r.Bot.StartedAt != nil && a.Bot != nil && a.Bot.StartedAt != nil && !r.Bot.StartedAt.Equal(*a.Bot.StartedAt) {
+		restarted = true
+	}
 	var bot any
 	if r.Bot != nil {
 		b, _ := json.Marshal(r.Bot)
@@ -210,6 +217,10 @@ func (s *Service) Ingest(ctx context.Context, a Agent, r Report) (ReportResult, 
 	}
 	if err := tx.Commit(); err != nil {
 		return res, err
+	}
+	if restarted {
+		s.event(ctx, &a.EntityID, "bot_restarted", SeverityInfo,
+			fmt.Sprintf("«%s» запущен заново в %s (по данным heartbeat)", a.Name, r.Bot.StartedAt.Local().Format("02.01 15:04:05")), nil)
 	}
 	if r.Dropped.Samples+r.Dropped.Logs > 0 {
 		s.logSystem(ctx, LevelWarning, fmt.Sprintf("Агент «%s» отбросил из очереди %d значений и %d записей журнала (Core был недоступен)",

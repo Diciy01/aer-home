@@ -337,26 +337,7 @@ func (s *Service) Events(ctx context.Context, entityID string, before int64, lim
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []Event{}
-	for rows.Next() {
-		var e Event
-		var ts int64
-		var sev string
-		var ent, inc sql.NullString
-		if err := rows.Scan(&e.ID, &ts, &ent, &e.Kind, &sev, &e.Message, &inc); err != nil {
-			return nil, err
-		}
-		e.At, e.Severity = fromMS(ts), Severity(sev)
-		if ent.Valid {
-			e.EntityID = &ent.String
-		}
-		if inc.Valid {
-			e.IncidentID = &inc.String
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
+	return scanEvents(rows)
 }
 
 // Overview summarizes the house for the dashboard.
@@ -438,4 +419,27 @@ func (s *Service) Prune(ctx context.Context) (PruneResult, error) {
 		s.log.Info("retention", "samples", r.Samples, "rollups", r.Rollups, "logs", r.Logs, "incidents", r.Incidents)
 	}
 	return r, nil
+}
+
+func scanEvents(rows *sql.Rows) ([]Event, error) {
+	defer rows.Close()
+	out := []Event{}
+	for rows.Next() {
+		var e Event
+		var ts int64
+		var sev string
+		var ent, inc sql.NullString
+		if err := rows.Scan(&e.ID, &ts, &ent, &e.Kind, &sev, &e.Message, &inc); err != nil {
+			return nil, err
+		}
+		e.At, e.Severity = fromMS(ts), Severity(sev)
+		if ent.Valid {
+			e.EntityID = &ent.String
+		}
+		if inc.Valid {
+			e.IncidentID = &inc.String
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

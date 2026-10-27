@@ -39,6 +39,9 @@ type entitySettings struct {
 	Ports     []int  `json:"ports"`
 	Container string `json:"container"`
 	URL       string `json:"url"`
+	// HeartbeatTimeoutSec overrides the global timeout for this entity's
+	// agents (set by Bots from the bot's heartbeat settings).
+	HeartbeatTimeoutSec int `json:"heartbeatTimeoutSec"`
 }
 
 func settingsOf(e registry.Entity) entitySettings {
@@ -140,6 +143,14 @@ func (s *Service) observe(ctx context.Context, e registry.Entity) observation {
 		}
 		return s.docker.observe(name)
 	case "telegram_bot", "application", "process", "service", "automation":
+		// A bot without heartbeat can still be watched through its container
+		// or its HTTP health endpoint (n8n /healthz), when configured.
+		switch {
+		case set.Container != "":
+			return s.docker.observe(set.Container)
+		case set.URL != "":
+			return s.probeHTTP(ctx, set.URL)
+		}
 		return observation{status: StatusUnknown, kind: "none",
 			reason: "Нет источника heartbeat: создайте для объекта учётные данные агента или бота (Мониторинг → Агенты)"}
 	case "virtual_object", "custom":
@@ -169,11 +180,15 @@ func (s *Service) observe(ctx context.Context, e registry.Entity) observation {
 func (s *Service) observeAgents(e registry.Entity, agents []Agent) observation {
 	var last *time.Time
 	var active []Agent
+	timeout := time.Duration(s.cfg.HeartbeatTimeoutSec) * time.Second
+	if t := settingsOf(e).HeartbeatTimeoutSec; t > 0 {
+		timeout = time.Duration(t) * time.Second
+	}
 	for _, a := range agents {
 		if a.LastSeenAt != nil && (last == nil || a.LastSeenAt.After(*last)) {
 			last = a.LastSeenAt
 		}
-		if a.Active {
+		if a.RevokedAt == nil && a.LastSeenAt != nil && s.now().Sub(*a.LastSeenAt) <= timeout {
 			active = append(active, a)
 		}
 	}

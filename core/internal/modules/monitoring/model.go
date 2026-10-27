@@ -145,6 +145,8 @@ type BotStatus struct {
 	LastRestartAt *time.Time `json:"lastRestartAt"`
 	StartedAt     *time.Time `json:"startedAt"`
 	APIOK         *bool      `json:"apiOk"`
+	// Version is the bot's own version (not the heartbeat library's).
+	Version string `json:"version,omitempty"`
 }
 
 // Agent is a registered reporting identity (OS agent or bot heartbeat).

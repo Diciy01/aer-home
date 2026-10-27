@@ -58,7 +58,7 @@ func newFixture(t *testing.T, mut ...func(*config.Monitoring)) *fixture {
 	if _, err := storage.Migrate(ctx, db, registry.Name, rm.Migrations()); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := storage.Migrate(ctx, db, Name, migrations); err != nil || n != 1 {
+	if n, err := storage.Migrate(ctx, db, Name, migrations); err != nil || n != len(migrations) {
 		t.Fatalf("migrate: n=%d err=%v", n, err)
 	}
 	if n, err := storage.Migrate(ctx, db, Name, migrations); err != nil || n != 0 {

@@ -115,7 +115,7 @@ func (s *Service) integrationList() []IntegrationStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []IntegrationStatus{}
-	for _, id := range []string{"checks", "docker", "telegram"} {
+	for _, id := range []string{"checks", "docker", "telegram", "bots", "n8n"} {
 		if st, ok := s.integrations[id]; ok {
 			out = append(out, st)
 		}

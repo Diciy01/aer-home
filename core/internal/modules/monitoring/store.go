@@ -151,4 +151,7 @@ CREATE TABLE mon_containers (
 	seen_at    INTEGER NOT NULL
 );
 `},
+	// v2 (M06): a bot's log page filters by entity and orders by id; without
+	// this index SQLite sorts every row of the entity (148 ms at 50k lines).
+	{Version: 2, Name: "logs_entity_id_index", SQL: `CREATE INDEX mon_logs_entity_id ON mon_logs(entity_id, id)`},
 }
