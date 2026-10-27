@@ -5,9 +5,11 @@
 package module
 
 import (
+	"context"
 	"database/sql"
 	"log/slog"
 
+	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/foundation/httpapi"
 	"aerhome/core/internal/foundation/storage"
 )
@@ -17,6 +19,15 @@ type Deps struct {
 	DB     *sql.DB
 	Logger *slog.Logger
 	Demo   bool
+	// Config is the effective Core configuration (no secrets inside).
+	Config config.Config
+}
+
+// Runner is implemented by modules with background work (checks, retention).
+// Core calls Run once after all modules started, in its own goroutine, and
+// cancels ctx on shutdown; Run must return promptly after that.
+type Runner interface {
+	Run(ctx context.Context)
 }
 
 // Module is a self-contained feature (Registry, Scene, Monitoring, ...).

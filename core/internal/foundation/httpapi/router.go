@@ -21,18 +21,33 @@ const maxBodyBytes = 1 << 20
 // envelope; any other error becomes INTERNAL and is logged.
 type HandlerFunc func(w http.ResponseWriter, r *http.Request) error
 
+// Authorizer authenticates a request by its own credential scheme (e.g. a
+// per-agent token). It returns the request with the caller identity in its
+// context, or ok=false. Routes with an Authorizer never accept the owner token.
+type Authorizer func(r *http.Request) (*http.Request, bool)
+
 // Route describes a registered endpoint (used by contract tests).
 type Route struct {
 	Method string
 	Path   string // relative to Prefix, e.g. "/health"
 	Public bool
+	// Scheme names the credential: "owner" (default), "public" or a custom one.
+	Scheme string
+
+	authz Authorizer
 }
 
 // RouteOption customises a route.
 type RouteOption func(*Route)
 
 // Public marks a route as reachable without the bearer token.
-func Public() RouteOption { return func(rt *Route) { rt.Public = true } }
+func Public() RouteOption { return func(rt *Route) { rt.Public, rt.Scheme = true, "public" } }
+
+// Authorize guards a route with a dedicated credential scheme instead of the
+// owner token (agent endpoints).
+func Authorize(scheme string, a Authorizer) RouteOption {
+	return func(rt *Route) { rt.Scheme, rt.authz = scheme, a }
+}
 
 // TokenVerifier reports whether a presented bearer token is valid.
 type TokenVerifier func(token string) bool
@@ -52,7 +67,7 @@ func NewRouter(log *slog.Logger, verify TokenVerifier) *Router {
 
 // Handle registers a handler for method and path (relative to Prefix).
 func (rt *Router) Handle(method, path string, h HandlerFunc, opts ...RouteOption) {
-	route := Route{Method: method, Path: path}
+	route := Route{Method: method, Path: path, Scheme: "owner"}
 	for _, o := range opts {
 		o(&route)
 	}
@@ -74,7 +89,16 @@ func (rt *Router) Routes() []Route {
 
 func (rt *Router) wrap(route Route, h HandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !route.Public && !rt.authorized(r) {
+		switch {
+		case route.authz != nil:
+			ar, ok := route.authz(r)
+			if !ok {
+				w.Header().Set("WWW-Authenticate", `Bearer realm="aer-core-`+route.Scheme+`"`)
+				WriteError(w, r, NewError(http.StatusUnauthorized, CodeUnauthorized, "missing, invalid or revoked credential"))
+				return
+			}
+			r = ar
+		case !route.Public && !rt.authorized(r):
 			w.Header().Set("WWW-Authenticate", `Bearer realm="aer-core"`)
 			WriteError(w, r, NewError(http.StatusUnauthorized, CodeUnauthorized, "missing or invalid bearer token"))
 			return

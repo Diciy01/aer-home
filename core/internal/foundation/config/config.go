@@ -34,6 +34,8 @@ type Config struct {
 	LogFormat  string `json:"logFormat"`
 	// Modules switches optional modules on or off by name. Absent means enabled.
 	Modules map[string]bool `json:"modules,omitempty"`
+	// Monitoring configures the Monitoring module (M05).
+	Monitoring Monitoring `json:"monitoring"`
 }
 
 // EnvLookup matches os.LookupEnv so tests can inject an isolated environment.
@@ -47,6 +49,7 @@ func Default(env EnvLookup) Config {
 		DataDir:    defaultDataDir(env),
 		LogLevel:   "info",
 		LogFormat:  "text",
+		Monitoring: DefaultMonitoring(),
 	}
 }
 
@@ -116,6 +119,9 @@ func (c Config) Validate() error {
 	case "text", "json":
 	default:
 		errs = append(errs, fmt.Errorf("logFormat %q: want text or json", c.LogFormat))
+	}
+	if err := c.Monitoring.Validate(); err != nil {
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

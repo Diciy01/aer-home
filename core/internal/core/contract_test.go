@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -111,7 +113,7 @@ func TestImplementedRoutesMatchContract(t *testing.T) {
 }
 
 func TestContractVersion(t *testing.T) {
-	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.5.") {
+	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.6.") {
 		t.Fatalf("openapi info.version = %q; bump deliberately with an ADR", v)
 	}
 }
@@ -230,4 +232,141 @@ func TestResponsesMatchContractSchemas(t *testing.T) {
 func mustJSON(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+// TestMonitoringContract checks Monitoring payloads against the contract and
+// the separation of credentials: agent routes accept only agent tokens,
+// owner routes never accept agent tokens.
+func TestMonitoringContract(t *testing.T) {
+	doc := loadOpenAPI(t)
+	cfg := testConfig(t, t.TempDir())
+	c := newCore(t, cfg, modules.All()...)
+	srv := httptest.NewServer(c.Handler())
+	defer srv.Close()
+	owner := readToken(t, cfg)
+
+	do := func(method, path, token, body string) (int, map[string]json.RawMessage) {
+		t.Helper()
+		var rd io.Reader
+		if body != "" {
+			rd = strings.NewReader(body)
+		}
+		req, _ := http.NewRequest(method, srv.URL+"/api/v1"+path, rd)
+		req.Header.Set("Authorization", "Bearer "+token)
+		res, err := srv.Client().Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var env map[string]json.RawMessage
+		if err := json.NewDecoder(res.Body).Decode(&env); err != nil {
+			t.Fatal(err)
+		}
+		return res.StatusCode, env
+	}
+	call := func(method, path, token, body string) json.RawMessage {
+		t.Helper()
+		code, env := do(method, path, token, body)
+		if code >= 300 {
+			t.Fatalf("%s %s: %d %s", method, path, code, env["error"])
+		}
+		return env["data"]
+	}
+	each := func(name string, raw json.RawMessage) {
+		t.Helper()
+		var items []json.RawMessage
+		if err := json.Unmarshal(raw, &items); err != nil {
+			t.Fatalf("%s: %s", name, raw)
+		}
+		for _, it := range items {
+			checkShape(t, doc, name, it)
+		}
+	}
+	// TEST DATA
+	var host struct{ ID string }
+	_ = json.Unmarshal(call("POST", "/registry/entities", owner, `{"name":"Сервер (тест)","type":"server"}`), &host)
+	created := call("POST", "/monitoring/agents", owner, `{"entityId":"`+host.ID+`","name":"ubuntu-agent","kind":"host"}`)
+	checkShape(t, doc, "CreatedAgent", created)
+	var ca struct {
+		Agent struct{ ID string }
+		Token string
+	}
+	_ = json.Unmarshal(created, &ca)
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	report := `{"agent":{"version":"0.1.0","os":"linux"},"samples":[
+		{"metric":"disk.used_percent","label":"/","value":97,"at":"` + now + `","quality":"ok"},
+		{"metric":"gpu.temperature","at":"` + now + `","quality":"unsupported","reason":"нет датчика"}],
+		"logs":[{"at":"` + now + `","level":"error","message":"disk almost full"}]}`
+	if code, _ := do("POST", "/monitoring/agent/report", owner, report); code != http.StatusUnauthorized {
+		t.Fatalf("owner token on the agent route: %d", code)
+	}
+	if code, _ := do("GET", "/monitoring/states", ca.Token, ""); code != http.StatusUnauthorized {
+		t.Fatalf("agent token on an owner route: %d", code)
+	}
+	checkShape(t, doc, "ReportResult", call("POST", "/monitoring/agent/report", ca.Token, report))
+	checkShape(t, doc, "ReportResult", call("POST", "/monitoring/agent/report", ca.Token, report))
+
+	each("MetricType", call("GET", "/monitoring/metric-types", owner, ""))
+	each("DeviceState", call("GET", "/monitoring/states", owner, ""))
+	st := call("GET", "/monitoring/states/"+host.ID, owner, "")
+	checkShape(t, doc, "DeviceState", st)
+	var ds struct {
+		KeyMetrics []json.RawMessage
+		Agents     []json.RawMessage
+	}
+	_ = json.Unmarshal(st, &ds)
+	for _, m := range ds.KeyMetrics {
+		checkShape(t, doc, "MetricValue", m)
+	}
+	for _, a := range ds.Agents {
+		checkShape(t, doc, "Agent", a)
+	}
+	ser := call("GET", "/monitoring/states/"+host.ID+"/history?metric=disk.used_percent&label=/", owner, "")
+	checkShape(t, doc, "MetricSeries", ser)
+	var sp struct{ Points []json.RawMessage }
+	_ = json.Unmarshal(ser, &sp)
+	checkShape(t, doc, "MetricPoint", sp.Points[0])
+	logs := call("GET", "/monitoring/logs?level=error", owner, "")
+	checkShape(t, doc, "LogPage", logs)
+	var lp struct{ Items []json.RawMessage }
+	_ = json.Unmarshal(logs, &lp)
+	for _, l := range lp.Items {
+		checkShape(t, doc, "LogEntry", l)
+	}
+	var first struct{ ID int64 }
+	_ = json.Unmarshal(lp.Items[0], &first)
+	checkShape(t, doc, "LogEntry", call("GET", "/monitoring/logs/"+fmt.Sprint(first.ID), owner, ""))
+	each("MonitoringEvent", call("GET", "/monitoring/events", owner, ""))
+	page := call("GET", "/monitoring/incidents?status=active", owner, "")
+	checkShape(t, doc, "IncidentPage", page)
+	var ip struct {
+		Items []struct{ ID string }
+	}
+	_ = json.Unmarshal(page, &ip)
+	if len(ip.Items) != 1 {
+		t.Fatalf("low disk incident expected: %s", page)
+	}
+	checkShape(t, doc, "Incident", call("GET", "/monitoring/incidents/"+ip.Items[0].ID, owner, ""))
+	checkShape(t, doc, "Incident", call("POST", "/monitoring/incidents/"+ip.Items[0].ID+"/acknowledge", owner, `{"note":"вижу"}`))
+	notes := call("GET", "/monitoring/notifications", owner, "")
+	checkShape(t, doc, "NotificationList", notes)
+	var nl struct{ Items []json.RawMessage }
+	_ = json.Unmarshal(notes, &nl)
+	for _, n := range nl.Items {
+		checkShape(t, doc, "Notification", n)
+	}
+	checkShape(t, doc, "MarkReadResult", call("POST", "/monitoring/notifications/read", owner, `{}`))
+	ov := call("GET", "/monitoring/overview", owner, "")
+	checkShape(t, doc, "MonitoringOverview", ov)
+	each("Agent", call("GET", "/monitoring/agents", owner, ""))
+	dl := call("GET", "/monitoring/docker/containers", owner, "")
+	checkShape(t, doc, "ContainerList", dl)
+	checkShape(t, doc, "Agent", call("POST", "/monitoring/agents/"+ca.Agent.ID+"/revoke", owner, ""))
+	if code, _ := do("POST", "/monitoring/agent/report", ca.Token, report); code != http.StatusUnauthorized {
+		t.Fatalf("revoked token: %d", code)
+	}
+	if code, env := do("POST", "/monitoring/agents", owner, `{"entityId":"`+host.ID+`","name":""}`); code != 422 {
+		t.Fatalf("validation: %d %s", code, env["error"])
+	}
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.5.0
+  version: 0.6.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -17,6 +17,10 @@ info:
     0.5.0 — Scene editor (M04): room style materials are data-defined ids (pattern instead of
     enum), optional `style.light`; additive, every 0.4.0 document stays valid.
     See docs/adr/ADR-010-scene-editor.md.
+    0.6.0 — Monitoring (M05) under /monitoring: states, metric history, logs, events, incidents,
+    notifications, agent credentials, Docker; agent protocol POST /monitoring/agent/report with
+    per-agent credentials (agentAuth). The draft /incidents path and Incident schema are replaced.
+    See docs/adr/ADR-011-monitoring.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -314,13 +318,13 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
-  /incidents:
+  /monitoring/overview:
     get:
-      x-aer-status: planned
-      summary: List incident summaries (M05 Monitoring)
+      x-aer-status: implemented
+      summary: "Monitoring summary: devices by status, incidents, integrations, recent events"
       responses:
         '200':
-          description: Incidents
+          description: OK
           content:
             application/json:
               schema:
@@ -328,12 +332,364 @@ paths:
                   - $ref: '#/components/schemas/SuccessEnvelope'
                   - type: object
                     properties:
-                      data:
-                        type: array
-                        items: { $ref: '#/components/schemas/Incident' }
+                      data: { $ref: '#/components/schemas/MonitoringOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/metric-types:
+    get:
+      x-aer-status: implemented
+      summary: "Catalog of accepted metrics (agents may not invent names)"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MetricType' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/states:
+    get:
+      x-aer-status: implemented
+      summary: "Current state of every active Registry entity"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/DeviceState' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/states/{entityId}:
+    get:
+      x-aer-status: implemented
+      summary: "State of one entity with all latest metrics and its agents"
+      parameters:
+        - { name: entityId, in: path, required: true, schema: { type: string }, description: "Registry entity UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/DeviceState' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /monitoring/states/{entityId}/history:
+    get:
+      x-aer-status: implemented
+      summary: "Metric history: raw for short recent ranges, 5-minute aggregates otherwise; gaps are null"
+      parameters:
+        - { name: entityId, in: path, required: true, schema: { type: string }, description: "Registry entity UUID" }
+        - { name: metric, in: query, required: true, schema: { type: string }, description: "Metric id" }
+        - { name: label, in: query, required: false, schema: { type: string }, description: "Series label (mount, iface…)" }
+        - { name: from, in: query, required: false, schema: { type: string }, description: "RFC 3339, default to−1h" }
+        - { name: to, in: query, required: false, schema: { type: string }, description: "RFC 3339, default now" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MetricSeries' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /monitoring/logs:
+    get:
+      x-aer-status: implemented
+      summary: "Search centralized logs (newest first, cursor pagination)"
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string }, description: "Words in message or source" }
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: source, in: query, required: false, schema: { type: string }, description: "Source prefix" }
+        - { name: level, in: query, required: false, schema: { type: string }, description: "Minimum level" }
+        - { name: incidentId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: from, in: query, required: false, schema: { type: string }, description: "RFC 3339" }
+        - { name: to, in: query, required: false, schema: { type: string }, description: "RFC 3339" }
+        - { name: before, in: query, required: false, schema: { type: integer }, description: "Cursor: ids below" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "1…500" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/LogPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /monitoring/logs/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "One log entry"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer }, description: "Log id" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/LogEntry' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /monitoring/events:
+    get:
+      x-aer-status: implemented
+      summary: "Event history (state changes, incidents, integrations)"
+      parameters:
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: before, in: query, required: false, schema: { type: integer }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MonitoringEvent' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/incidents:
+    get:
+      x-aer-status: implemented
+      summary: "List incidents (active first, then by severity)"
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string }, description: "active | open | acknowledged | resolved" }
+        - { name: severity, in: query, required: false, schema: { type: string }, description: "info | warning | critical" }
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+        - { name: offset, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/IncidentPage' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /monitoring/incidents/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "One incident with its timeline"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "Incident UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Incident' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /monitoring/incidents/{id}/acknowledge:
+    post:
+      x-aer-status: implemented
+      summary: "Acknowledge an open incident (it still resolves automatically on recovery)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "Incident UUID" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcknowledgeRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Incident' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /monitoring/notifications:
+    get:
+      x-aer-status: implemented
+      summary: "Notification center (newest first)"
+      parameters:
+        - { name: unread, in: query, required: false, schema: { type: boolean }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/NotificationList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/notifications/read:
+    post:
+      x-aer-status: implemented
+      summary: "Mark notifications read (all when ids is empty)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkReadRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/MarkReadResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /monitoring/agents:
+    get:
+      x-aer-status: implemented
+      summary: "Agent and bot heartbeat credentials (no secrets)"
+      parameters:
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Agent' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: "Create a credential bound to one entity; the token is returned once"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NewAgent' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/CreatedAgent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /monitoring/agents/{id}/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Revoke an agent credential immediately"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "Agent UUID" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Agent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /monitoring/docker/containers:
+    get:
+      x-aer-status: implemented
+      summary: "Last known Docker containers and whether Docker answers now (read-only)"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ContainerList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /monitoring/agent/report:
+    post:
+      x-aer-status: implemented
+      summary: "Agent protocol v1: heartbeat + metrics + logs. Agent credential only; the entity comes from the credential"
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentReport' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/ReportResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
+    agentAuth:
+      type: http
+      scheme: bearer
+      description: Per-agent credential (aer1.<agentId>.<secret>) bound to one Registry entity; revocable. Never the owner token.
   responses:
     Unauthorized:
       description: Missing or invalid bearer token
@@ -660,12 +1016,301 @@ components:
       properties:
         revision: { type: integer, minimum: 1 }
         document: { $ref: 'scene.schema.json' }
-    Incident:
+    MetricType:
       type: object
-      required: [id, severity, title, createdAt]
+      required: [id, label, unit, description, labelKey, key]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        unit: { type: string }
+        description: { type: string }
+        labelKey: { type: string }
+        key: { type: boolean }
+    MetricValue:
+      type: object
+      required: [metric, label, value, unit, at, source, quality, reason]
+      properties:
+        metric: { type: string }
+        label: { type: string }
+        value: { type: [number, 'null'], description: null when the value is unsupported or unavailable }
+        unit: { type: string }
+        at: { type: string, format: date-time }
+        source: { type: string }
+        quality: { type: string, enum: [ok, unsupported, unavailable] }
+        reason: { type: string }
+    MonitoringStatus: { type: string, enum: [online, degraded, offline, unknown, unsupported] }
+    Severity: { type: string, enum: [info, warning, critical] }
+    AgentInfo:
+      type: object
+      properties:
+        version: { type: string }
+        os: { type: string }
+        osVersion: { type: string }
+        hostname: { type: string }
+        uptimeSec: { type: number }
+        collectors: { type: object, additionalProperties: { type: string } }
+    BotStatus:
+      type: object
+      properties:
+        lastSuccessAt: { type: [string, 'null'], format: date-time }
+        lastError: { type: string }
+        lastErrorAt: { type: [string, 'null'], format: date-time }
+        lastRestartAt: { type: [string, 'null'], format: date-time }
+        startedAt: { type: [string, 'null'], format: date-time }
+        apiOk: { type: [boolean, 'null'] }
+    Agent:
+      type: object
+      required: [id, entityId, name, kind, createdAt, revokedAt, lastSeenAt, info, bot, active]
       properties:
         id: { type: string, format: uuid }
-        title: { type: string }
-        severity: { type: string, enum: [INFO, WARNING, ERROR, CRITICAL] }
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [host, bot] }
         createdAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        info: { oneOf: [{ $ref: '#/components/schemas/AgentInfo' }, { type: 'null' }] }
+        bot: { oneOf: [{ $ref: '#/components/schemas/BotStatus' }, { type: 'null' }] }
+        active: { type: boolean }
+    NewAgent:
+      type: object
+      required: [entityId, name]
+      additionalProperties: false
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 80 }
+        kind: { type: string, enum: [host, bot] }
+    CreatedAgent:
+      type: object
+      required: [agent, token]
+      properties:
+        agent: { $ref: '#/components/schemas/Agent' }
+        token: { type: string, description: 'aer1.<agentId>.<secret>; shown once, store it in the agent token file' }
+    DeviceState:
+      type: object
+      required: [entityId, name, type, status, reason, checkKind, lastContactAt, lastCheckAt, changedAt, keyMetrics, openIncidents, worstSeverity, agents]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        status: { $ref: '#/components/schemas/MonitoringStatus' }
+        reason: { type: string }
+        checkKind: { type: string, enum: [agent, heartbeat, http, tcp, docker, none] }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        lastCheckAt: { type: [string, 'null'], format: date-time }
+        changedAt: { type: [string, 'null'], format: date-time }
+        keyMetrics: { type: array, items: { $ref: '#/components/schemas/MetricValue' } }
+        openIncidents: { type: integer }
+        worstSeverity: { oneOf: [{ $ref: '#/components/schemas/Severity' }, { type: 'null' }] }
+        agents: { type: array, items: { $ref: '#/components/schemas/Agent' } }
+    MetricPoint:
+      type: object
+      required: [t, value, min, max]
+      properties:
+        t: { type: string, format: date-time }
+        value: { type: [number, 'null'] }
+        min: { type: [number, 'null'] }
+        max: { type: [number, 'null'] }
+    MetricSeries:
+      type: object
+      required: [entityId, metric, label, unit, from, to, resolution, stepSec, points]
+      properties:
+        entityId: { type: string }
+        metric: { type: string }
+        label: { type: string }
+        unit: { type: string }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        resolution: { type: string, enum: [raw, 5m] }
+        stepSec: { type: integer }
+        points: { type: array, items: { $ref: '#/components/schemas/MetricPoint' } }
+    LogLevel: { type: string, enum: [debug, info, warning, error, critical] }
+    LogEntry:
+      type: object
+      required: [id, at, entityId, source, level, message, correlationId, fields, incidentId]
+      properties:
+        id: { type: integer }
+        at: { type: string, format: date-time }
+        entityId: { type: [string, 'null'] }
+        source: { type: string }
+        level: { $ref: '#/components/schemas/LogLevel' }
+        message: { type: string, description: secrets are redacted before storage }
+        correlationId: { type: string }
+        fields: { type: [object, 'null'] }
+        incidentId: { type: [string, 'null'] }
+    LogPage:
+      type: object
+      required: [items, nextBefore]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/LogEntry' } }
+        nextBefore: { type: [integer, 'null'] }
+    MonitoringEvent:
+      type: object
+      required: [id, at, entityId, kind, severity, message, incidentId]
+      properties:
+        id: { type: integer }
+        at: { type: string, format: date-time }
+        entityId: { type: [string, 'null'] }
+        kind: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        message: { type: string }
+        incidentId: { type: [string, 'null'] }
+    IncidentEvent:
+      type: object
+      required: [at, kind, message]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { type: string, enum: [opened, repeated, acknowledged, resolved, note] }
+        message: { type: string }
+    Incident:
+      type: object
+      required: [id, key, title, source, entityId, severity, status, openedAt, updatedAt, acknowledgedAt, resolvedAt, cause, related, occurrences, lastMessage]
+      properties:
+        id: { type: string, format: uuid }
+        key: { type: string, description: grouping key; one unresolved incident per key }
+        title: { type: string }
+        source: { type: string }
         entityId: { type: [string, 'null'], format: uuid }
+        severity: { $ref: '#/components/schemas/Severity' }
+        status: { type: string, enum: [open, acknowledged, resolved] }
+        openedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        acknowledgedAt: { type: [string, 'null'], format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        cause: { type: string, description: only from direct evidence; empty when unknown }
+        related: { type: array, items: { type: string }, description: correlated incidents (not a cause) }
+        occurrences: { type: integer }
+        lastMessage: { type: string }
+        timeline: { type: array, items: { $ref: '#/components/schemas/IncidentEvent' } }
+    IncidentPage:
+      type: object
+      required: [items, total]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Incident' } }
+        total: { type: integer }
+    AcknowledgeRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note: { type: string, maxLength: 300 }
+    Notification:
+      type: object
+      required: [id, at, kind, severity, title, body, entityId, incidentId, readAt, telegram]
+      properties:
+        id: { type: string, format: uuid }
+        at: { type: string, format: date-time }
+        kind: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        title: { type: string }
+        body: { type: string }
+        entityId: { type: [string, 'null'] }
+        incidentId: { type: [string, 'null'] }
+        readAt: { type: [string, 'null'], format: date-time }
+        telegram: { type: string, enum: [disabled, pending, sent, skipped, failed] }
+    NotificationList:
+      type: object
+      required: [items, unread]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Notification' } }
+        unread: { type: integer }
+    MarkReadRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        ids: { type: array, items: { type: string } }
+    MarkReadResult:
+      type: object
+      required: [marked]
+      properties:
+        marked: { type: integer }
+    IntegrationStatus:
+      type: object
+      required: [id, label, status, reason, checkedAt]
+      properties:
+        id: { type: string }
+        label: { type: string }
+        status: { type: string, enum: [ok, unavailable, disabled] }
+        reason: { type: string }
+        checkedAt: { type: [string, 'null'], format: date-time }
+    MonitoringOverview:
+      type: object
+      required: [generatedAt, devices, byStatus, openIncidents, criticalOpen, unreadNotifications, integrations, recentEvents]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        devices: { type: integer }
+        byStatus: { type: object, additionalProperties: { type: integer } }
+        openIncidents: { type: integer }
+        criticalOpen: { type: integer }
+        unreadNotifications: { type: integer }
+        integrations: { type: array, items: { $ref: '#/components/schemas/IntegrationStatus' } }
+        recentEvents: { type: array, items: { $ref: '#/components/schemas/MonitoringEvent' } }
+    Container:
+      type: object
+      required: [id, name, image, state, health, startedAt, finishedAt, exitCode, oomKilled, error, restartCount, changedAt, entityId, cpuPercent, memBytes, lastErrors]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        image: { type: string }
+        state: { type: string }
+        health: { type: string }
+        startedAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        exitCode: { type: [integer, 'null'] }
+        oomKilled: { type: boolean }
+        error: { type: string }
+        restartCount: { type: integer }
+        changedAt: { type: string, format: date-time }
+        entityId: { type: [string, 'null'] }
+        cpuPercent: { type: [number, 'null'] }
+        memBytes: { type: [number, 'null'] }
+        lastErrors: { type: array, items: { type: string } }
+    ContainerList:
+      type: object
+      required: [integration, items]
+      properties:
+        integration: { $ref: '#/components/schemas/IntegrationStatus' }
+        items: { type: array, items: { $ref: '#/components/schemas/Container' } }
+    AgentSample:
+      type: object
+      required: [metric, at, quality]
+      additionalProperties: false
+      properties:
+        metric: { type: string, description: id from GET /monitoring/metric-types }
+        label: { type: string, maxLength: 120 }
+        value: { type: [number, 'null'] }
+        at: { type: string, format: date-time }
+        quality: { type: string, enum: [ok, unsupported, unavailable] }
+        reason: { type: string }
+    AgentLog:
+      type: object
+      required: [at, level, message]
+      additionalProperties: false
+      properties:
+        at: { type: string, format: date-time }
+        level: { $ref: '#/components/schemas/LogLevel' }
+        source: { type: string, maxLength: 120 }
+        message: { type: string }
+        correlationId: { type: string, maxLength: 120 }
+        fields: { type: object }
+    AgentReport:
+      type: object
+      additionalProperties: false
+      properties:
+        agent: { $ref: '#/components/schemas/AgentInfo' }
+        bot: { $ref: '#/components/schemas/BotStatus' }
+        samples: { type: array, maxItems: 2000, items: { $ref: '#/components/schemas/AgentSample' } }
+        logs: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/AgentLog' } }
+        dropped:
+          type: object
+          properties:
+            samples: { type: integer }
+            logs: { type: integer }
+    ReportResult:
+      type: object
+      required: [acceptedSamples, acceptedLogs, droppedLogs, serverTime, intervalSec]
+      properties:
+        acceptedSamples: { type: integer }
+        acceptedLogs: { type: integer }
+        droppedLogs: { type: integer }
+        serverTime: { type: string, format: date-time }
+        intervalSec: { type: integer }

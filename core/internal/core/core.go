@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"aerhome/core/internal/foundation/auth"
@@ -47,6 +48,9 @@ type Core struct {
 	instance     instance
 	modules      []module.Status
 	tokenCreated bool
+	runners      []module.Runner
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
 }
 
 type instance struct {
@@ -88,6 +92,16 @@ func New(ctx context.Context, opts Options) (*Core, error) {
 	for _, nf := range opts.Modules {
 		c.modules = append(c.modules, c.startModule(ctx, nf))
 	}
+	// Background work lives as long as the Core, not the startup context.
+	runCtx, cancel := context.WithCancel(context.Background())
+	c.cancel = cancel
+	for _, r := range c.runners {
+		c.wg.Add(1)
+		go func() {
+			defer c.wg.Done()
+			r.Run(runCtx)
+		}()
+	}
 	return c, nil
 }
 
@@ -102,7 +116,7 @@ func (c *Core) startModule(ctx context.Context, nf module.Named) module.Status {
 		st.Error = err.Error()
 		return st
 	}
-	m, err := nf.New(module.Deps{DB: c.db, Logger: logging.Module(c.log, nf.Name), Demo: c.cfg.IsDemo()})
+	m, err := nf.New(module.Deps{DB: c.db, Logger: logging.Module(c.log, nf.Name), Demo: c.cfg.IsDemo(), Config: c.cfg})
 	if err != nil {
 		return fail(err)
 	}
@@ -113,6 +127,9 @@ func (c *Core) startModule(ctx context.Context, nf module.Named) module.Status {
 		return fail(err)
 	}
 	m.RegisterRoutes(c.router)
+	if r, ok := m.(module.Runner); ok {
+		c.runners = append(c.runners, r)
+	}
 	return st
 }
 
@@ -128,8 +145,14 @@ func (c *Core) TokenCreated() bool { return c.tokenCreated }
 // InstanceID is the persistent identity of this Core database.
 func (c *Core) InstanceID() string { return c.instance.ID }
 
-// Close releases the database.
-func (c *Core) Close() error { return c.db.Close() }
+// Close stops background work and releases the database.
+func (c *Core) Close() error {
+	if c.cancel != nil {
+		c.cancel()
+	}
+	c.wg.Wait()
+	return c.db.Close()
+}
 
 func ensureInstance(ctx context.Context, db *sql.DB, now time.Time) (instance, error) {
 	if _, err := db.ExecContext(ctx,

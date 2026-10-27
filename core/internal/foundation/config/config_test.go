@@ -98,3 +98,27 @@ func TestValidationReportsAllErrors(t *testing.T) {
 		t.Fatalf("want both errors, got %v", err)
 	}
 }
+
+func TestMonitoringDefaultsAndValidation(t *testing.T) {
+	m := DefaultMonitoring()
+	if err := m.Validate(); err != nil {
+		t.Fatalf("defaults must be valid: %v", err)
+	}
+	if m.Telegram.Enabled {
+		t.Fatal("Telegram must be off by default")
+	}
+	bad := m
+	bad.Docker.Socket = "tcp://192.0.2.10:2375"
+	bad.Telegram.Enabled = true
+	bad.CheckIntervalSec = 1
+	bad.Thresholds.DiskFreeCriticalPercent = 50
+	err := bad.Validate()
+	if err == nil {
+		t.Fatal("expected errors")
+	}
+	for _, want := range []string{"docker.socket", "telegram: enabled", "checkIntervalSec", "diskFreeCriticalPercent"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing %q in %v", want, err)
+		}
+	}
+}
