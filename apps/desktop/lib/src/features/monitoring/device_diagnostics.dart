@@ -197,7 +197,7 @@ class _DeviceDiagnosticsState extends State<DeviceDiagnostics> {
                       _metrics(context),
                       offline
                           ? _needsCore(context)
-                          : _Charts(
+                          : MetricCharts(
                               api: api,
                               entityId: widget.entityId,
                               metrics: _all,
@@ -388,8 +388,10 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
-class _Charts extends StatefulWidget {
-  const _Charts({
+/// Metric picker + range chips + chart for one entity (also used by Bots).
+class MetricCharts extends StatefulWidget {
+  const MetricCharts({
+    super.key,
     required this.api,
     required this.entityId,
     required this.metrics,
@@ -399,10 +401,10 @@ class _Charts extends StatefulWidget {
   final List<MetricValue> metrics;
 
   @override
-  State<_Charts> createState() => _ChartsState();
+  State<MetricCharts> createState() => _MetricChartsState();
 }
 
-class _ChartsState extends State<_Charts> {
+class _MetricChartsState extends State<MetricCharts> {
   late MetricValue? _metric = _defaultMetric();
   Duration _range = const Duration(hours: 1);
   MetricSeries? _series;

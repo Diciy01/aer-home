@@ -35,6 +35,7 @@ class HouseView extends StatefulWidget {
     this.game,
     this.catalog,
     this.onOpenDiagnostics,
+    this.entityPanel,
   });
 
   final SceneController scene;
@@ -51,6 +52,9 @@ class HouseView extends StatefulWidget {
 
   /// Opens Monitoring diagnostics of an entity (null: Monitoring absent).
   final void Function(String entityId)? onOpenDiagnostics;
+
+  /// Extra quick-card panel for a bound entity (Bots); null when none.
+  final Widget? Function(String entityId)? entityPanel;
 
   @override
   State<HouseView> createState() => HouseViewState();
@@ -986,6 +990,11 @@ class HouseViewState extends State<HouseView> implements EditorActions {
                         g.object.entityBinding == null
                     ? null
                     : () => widget.onOpenDiagnostics!(
+                        g.object.entityBinding!.entityId,
+                      ),
+                extra: g.object.entityBinding == null
+                    ? null
+                    : widget.entityPanel?.call(
                         g.object.entityBinding!.entityId,
                       ),
               ),

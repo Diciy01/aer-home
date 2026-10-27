@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../features/bots/bot_details.dart';
+import '../features/bots/bot_scene_panel.dart';
+import '../features/bots/bots_view.dart';
 import '../features/classic/classic_view.dart';
 import '../features/house/house_view.dart';
 import '../features/monitoring/device_diagnostics.dart';
@@ -8,6 +11,7 @@ import '../features/monitoring/monitoring_view.dart';
 import '../features/registry/registry_view.dart';
 import '../scene/scene_controller.dart';
 import '../state/app_section.dart';
+import '../state/bots_controller.dart';
 import '../state/connection_controller.dart';
 import '../state/monitoring_controller.dart';
 import '../state/registry_controller.dart';
@@ -22,6 +26,7 @@ class AppShell extends StatelessWidget {
     required this.scene,
     required this.section,
     this.monitoring,
+    this.bots,
   });
 
   final ConnectionController connection;
@@ -29,6 +34,35 @@ class AppShell extends StatelessWidget {
   final SceneController scene;
   final AppSectionController section;
   final MonitoringController? monitoring;
+
+  /// Bots (M06); needs Monitoring, hidden when either is absent.
+  final BotsController? bots;
+
+  BotsController? get _bots => monitoring == null ? null : bots;
+
+  Widget? _botPanel(BuildContext context, String entityId) {
+    final b = _bots;
+    if (b == null) return null;
+    return ListenableBuilder(
+      listenable: b,
+      builder: (context, _) {
+        final bot = b.botFor(entityId);
+        if (bot == null) return const SizedBox.shrink();
+        return BotScenePanel(
+          bots: b,
+          bot: bot,
+          onOpen: (tab) => showBotDetails(
+            context,
+            bots: b,
+            mon: monitoring!,
+            registry: registry,
+            entityId: entityId,
+            tab: tab,
+          ),
+        );
+      },
+    );
+  }
 
   void _showInRegistry(String entityId) {
     section.value = AppSection.devices;
@@ -73,6 +107,12 @@ class AppShell extends StatelessWidget {
                     selectedIcon: Icon(Icons.monitor_heart_rounded),
                     label: Text('Мониторинг'),
                   ),
+                if (_bots != null)
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.smart_toy_outlined),
+                    selectedIcon: Icon(Icons.smart_toy_rounded),
+                    label: Text('Боты'),
+                  ),
               ],
             ),
             Expanded(
@@ -93,6 +133,9 @@ class AppShell extends StatelessWidget {
                                 ? null
                                 : (id) =>
                                       showDiagnostics(context, monitoring!, id),
+                            entityPanel: _bots == null
+                                ? null
+                                : (id) => _botPanel(context, id),
                           )
                         else
                           const SizedBox.shrink(),
@@ -104,6 +147,14 @@ class AppShell extends StatelessWidget {
                         if (monitoring != null)
                           section.visited.contains(AppSection.monitoring)
                               ? MonitoringView(
+                                  mon: monitoring!,
+                                  registry: registry,
+                                )
+                              : const SizedBox.shrink(),
+                        if (_bots case final b?)
+                          section.visited.contains(AppSection.bots)
+                              ? BotsView(
+                                  bots: b,
                                   mon: monitoring!,
                                   registry: registry,
                                 )

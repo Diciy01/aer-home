@@ -93,8 +93,9 @@ class CoreClient {
     Map<String, Object?>? query,
     Object? body,
     bool authenticated = true,
+    Map<String, String> headers = const {},
   }) async {
-    final headers = <String, String>{'Accept': 'application/json'};
+    final hdrs = <String, String>{'Accept': 'application/json', ...headers};
     if (authenticated) {
       final token = await _token();
       if (token == null || token.isEmpty) {
@@ -104,9 +105,9 @@ class CoreClient {
           message: 'API token not found',
         );
       }
-      headers['Authorization'] = 'Bearer $token';
+      hdrs['Authorization'] = 'Bearer $token';
     }
-    if (body != null) headers['Content-Type'] = 'application/json';
+    if (body != null) hdrs['Content-Type'] = 'application/json';
 
     final params = <String, dynamic>{};
     query?.forEach((k, v) {
@@ -118,7 +119,7 @@ class CoreClient {
       queryParameters: params.isEmpty ? null : params,
     );
 
-    final req = http.Request(method, uri)..headers.addAll(headers);
+    final req = http.Request(method, uri)..headers.addAll(hdrs);
     if (body != null) req.bodyBytes = utf8.encode(jsonEncode(body));
     final http.Response res;
     try {

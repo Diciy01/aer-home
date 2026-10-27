@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'scene/scene_controller.dart';
+import 'state/bots_controller.dart';
 import 'state/monitoring_controller.dart';
 import 'shell/app_shell.dart';
 import 'state/app_section.dart';
@@ -16,6 +17,7 @@ class AerHomeApp extends StatelessWidget {
     required this.scene,
     required this.section,
     this.monitoring,
+    this.bots,
   });
 
   final ConnectionController connection;
@@ -25,6 +27,9 @@ class AerHomeApp extends StatelessWidget {
 
   /// Monitoring (M05); the section is hidden when absent.
   final MonitoringController? monitoring;
+
+  /// Bots (M06); the section is hidden when absent.
+  final BotsController? bots;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +43,7 @@ class AerHomeApp extends StatelessWidget {
         scene: scene,
         section: section,
         monitoring: monitoring,
+        bots: bots,
       ),
     );
   }

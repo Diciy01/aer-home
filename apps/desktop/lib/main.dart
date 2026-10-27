@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import 'src/app.dart';
+import 'src/core_api/bots_api.dart';
 import 'src/core_api/core_client.dart';
 import 'src/core_api/endpoint.dart';
 import 'src/core_api/registry_api.dart';
 import 'src/scene/repository/scene_repository.dart';
 import 'src/scene/scene_controller.dart';
 import 'src/state/app_section.dart';
+import 'src/state/bots_controller.dart';
 import 'src/core_api/monitoring_api.dart';
 import 'src/state/connection_controller.dart';
 import 'src/state/monitoring_controller.dart';
@@ -33,6 +35,9 @@ void main() {
     cache: MonitoringCache.beside(sceneCache.file),
   );
   unawaited(monitoring.start());
+  // The house shows bot panels on bound objects, so bots load at startup.
+  final bots = BotsController(HttpBotsApi(client), connection);
+  unawaited(bots.start());
   final scene = SceneController(
     sceneApi: HttpSceneApi(client),
     registryApi: registryApi,
@@ -51,6 +56,7 @@ void main() {
       scene: scene,
       section: AppSectionController(),
       monitoring: monitoring,
+      bots: bots,
     ),
   );
 }

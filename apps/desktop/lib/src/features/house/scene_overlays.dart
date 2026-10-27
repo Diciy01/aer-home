@@ -149,6 +149,7 @@ class QuickCard extends StatelessWidget {
     required this.onOpen,
     required this.onProperties,
     this.onDiagnostics,
+    this.extra,
   });
 
   final ObjectGeometry geometry;
@@ -158,6 +159,9 @@ class QuickCard extends StatelessWidget {
   final VoidCallback? onOpen;
   final VoidCallback onProperties;
   final VoidCallback? onDiagnostics;
+
+  /// Module-specific panel for the bound entity (e.g. a bot's controls).
+  final Widget? extra;
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +258,10 @@ class QuickCard extends StatelessWidget {
                     Text('+${caps.length - 6}', style: text.labelSmall),
                 ],
               ),
+            ],
+            if (extra case final w?) ...[
+              const SizedBox(height: AerSpacing.s),
+              w,
             ],
             const SizedBox(height: AerSpacing.m),
             Wrap(
