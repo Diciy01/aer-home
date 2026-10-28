@@ -119,7 +119,7 @@ class RdpNative {
 
   /// Loads the library: `AER_RDP_LIB`, then the Flutter bundle
   /// (`lib/libaer_rdp.so`; on Windows `aer_rdp.dll` beside the exe, by full
-  /// path), then the loader's search path. Null when it is missing — the UI
+  /// path), then the loader's search path on Unix. Null when missing — the UI
   /// then offers the external client.
   static RdpNative? load() {
     if (_cached != null) return _cached;

@@ -28,6 +28,13 @@
 - [x] Эмулятор API 35 в `/mnt/Project` (пути — LOCAL_NOTES); сквозные тесты против стенда: 6/6 debug, 5/5 release; сбой/восстановление Core (`tools/mobile-lab/outage.py`)
 - [ ] Физический телефон, реальный Core в LAN/Tailscale — по команде владельца
 
+## M10 Windows Desktop — DONE (2026-10-28), не опубликовано
+- [x] Приняты коммиты Claude `fe99701`, `09a2d33`, `6bd1ed2`, `b464b2e`; оба Windows-примера сохранены; незавершённый UI-тест Monitoring исправлен и повторён.
+- [x] Go test/vet, Windows Agent → отдельный Core, TCP IPv4/IPv6, 215 Flutter tests/analyze, 11 Dart tests, Windows Release; настоящие UI Monitoring/навигация/Gateway sample RDP/переподключение/отзыв/offline, DPAPI, трей и Shell notification.
+- [x] ZIP с FreeRDP/CRT/лицензиями и пользовательским установщиком; запуск с PATH=System32 без SDK/vcpkg overrides, удаление по хэшам с сохранением добавленных/изменённых файлов.
+- [x] Исправлены Windows child trees Bots (Job Object), загрузка DLL, потерянный первый кадр и статус TLS-отказа. `windows-rdp` больше не обещает управляемый сеанс: Host → M14.4.
+- [ ] Чистая Windows VM, второй ПК/интернет, Windows NLA/clipboard/RU desktop — UNVERIFIED. Полная матрица, артефакт ZIP и ограничения: `docs/M10_WINDOWS_REPORT.md`, сборка/установка — `docs/WINDOWS.md`.
+
 ## M14 Remote 2 (Engine + Gateway + AER Connect) — IN_PROGRESS (с 2026-10-28), не опубликовано
 ADR-017, контракт 0.11.0, `docs/REMOTE_GATEWAY.md`. M07 сохранён полностью (прямой путь LAN работает как прежде).
 - [x] ADR-017 и строка M14 в дорожной карте (после M10, до M11)
@@ -38,4 +45,4 @@ ADR-017, контракт 0.11.0, `docs/REMOTE_GATEWAY.md`. M07 сохранён
 - [x] M14.5 интеграция в AER HOME: «Клиенты» (создать/права/код/отозвать) и «Через Gateway» (сервер, отпечаток, закрепление, сопряжение, сеанс во встроенном просмотре); Gateway сообщает отпечаток Core; живая проверка — `docs/REMOTE_GATEWAY.md`
 
 ## Следующий шаг
-Дальше по дорожной карте: M10 (Windows desktop), затем M14.4 (AER Connect для Windows, хост `windows-shadow`); M10 (Windows desktop) — **отложен владельцем до появления доступа к Windows**; не начинать без команды. M11 (iOS) — последним, после M10 (предпосылки — ROADMAP). M09 и M12 закоммичены локально, push — только с разрешения. Отдельно, по согласию владельца: живая приёмка M08 по `docs/POWER_DUALBOOT.md` → «Приёмка».
+M10 завершён. Следующая отдельная задача по команде владельца — M14.4 (AER Connect для Windows, управляемый Host/`windows-shadow`); начать с ограничений в `docs/WINDOWS.md`, не считать sample-сервер готовым Windows Host. В рамках завершения M10 M14.4/iOS не начинались. Перед публикацией — чистая Windows VM и решение о подписи пакета. Push только с разрешения. M11 — отдельный последний мобильный этап с предпосылками ROADMAP. Живая приёмка M08 — только с отдельным согласием владельца.

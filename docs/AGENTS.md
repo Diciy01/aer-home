@@ -66,7 +66,7 @@ hb.api_ok(check_api())    # собственная проверка зависи
 `POST /api/v1/monitoring/agent/report`, `Authorization: Bearer aer1.<agentId>.<secret>`; тело — `{agent, bot?, samples[], logs[], dropped}` (схема `AgentReport` в `contracts/openapi.yaml`). Ответ — `{acceptedSamples, acceptedLogs, droppedLogs, serverTime, intervalSec}`. Время значений — в окне −24 ч…+5 мин от часов Core.
 
 ## Статус проверки
-Ubuntu-агент проверен вживую против Core на этой машине (реальные CPU, RAM, диски, сеть, температуры CPU/GPU, journald, службы). Windows-агент собирается (`GOOS=windows go vet/build`), разборщики `sc query`, `wevtutil`, `nvidia-smi` покрыты тестами; **на реальной Windows не запускался (UNVERIFIED)**.
+Ubuntu-агент проверен вживую против Core (реальные CPU, RAM, диски, сеть, температуры CPU/GPU, journald, службы). M10: Windows-агент проверен на настоящей Windows 11 ru-RU против отдельного Core — heartbeat, CPU, RAM, диски C:/D:/E:, сеть, процессы, swap, служба Spooler через SCM (без зависимости от языка `sc query`). Исправлены разбор MultiSZ дисков и декодирование вывода wevtutil из ANSI code page. `TestWindowsLiveCollectorsAgainstCore` проверяет реальные сборщики, cancellation, отсутствие токенов в логах и отказ отозванному токену. UI Monitoring проходит со своими явно синтетическими log fixtures; поступление нового реального Event Log warning в живом окне — **UNVERIFIED**. Температуры Windows без vendor driver/прав честно unsupported. См. `docs/M10_WINDOWS_REPORT.md`.
 
 ## Агент питания (`aer-power-host`, M08)
 Отдельный бинарник и отдельная учётка вида `power` (не отчитывается в Мониторинг и не является источником heartbeat): факты загрузки и фиксированные действия питания. Режим проверки по умолчанию. Установка — `docs/POWER_CONNECT.md`.

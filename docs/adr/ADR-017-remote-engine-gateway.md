@@ -42,7 +42,7 @@ M07 дал рабочий удалённый доступ в LAN: Core — пл�
 | ОС хоста | Адаптер | Учётные данные | Статус |
 |---|---|---|---|
 | Ubuntu GNOME (Wayland) | `gnome-rdp` (M07) | пароль на сеанс | VERIFIED в M07 (стенд) |
-| Windows Pro/Enterprise | `windows-rdp` (M07) | учётная запись Windows (NLA), консоль блокируется | UNVERIFIED |
+| Windows Pro/Enterprise | `windows-rdp` (M07, readiness probe) | предполагается учётная запись Windows (NLA); управляемого AER-сеанса ещё нет | M10: ready=false / Open отказывает, пока не реализованы настоящий сертификат, права и отзыв; реализация Host → M14.4 |
 | Windows Home (и Pro без блокировки консоли) | `windows-shadow`: FreeRDP shadow server (Apache-2.0, подсистема Windows, DXGI) — общий доступ к текущему сеансу, пароль на сеанс через SAM-файл | пароль на сеанс | **SPIKE, UNVERIFIED** — проверка в M10/M14.4 |
 Встроенный RDP на Windows Home отсутствует — это не предполагается. Если shadow-подсистема FreeRDP окажется непригодной, запасной путь — серверная библиотека FreeRDP (`libfreerdp-server3`) с собственным захватом DXGI и `SendInput` за тем же интерфейсом `Backend`; кодеки остаются из FreeRDP.
 
