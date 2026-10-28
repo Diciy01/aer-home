@@ -163,3 +163,14 @@ AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18797 AER_CORE_TOKEN_FIL
   AER_REMOTE_LAB_TOOLS=$PWD/../../tools/remote-lab flutter test integration_test/remote_live_test.dart -d linux
 ```
 Клиент Remmina запускается приложением в изолированном Xvfb `:77`; сеанс и буфер обмена пользователя не затрагиваются.
+
+## Питание (M08): стенд и живая проверка
+```bash
+L=$(mktemp -d); python3 -I tools/power-lab/lab.py up $L 18797 &   # Core (WoL разрешён), aer-power-host в режиме проверки, приёмник WoL 127.0.0.1
+python3 -I tools/power-lab/lab.py bench $L                          # задержки API, параллельные задания, CPU/RSS
+cd apps/desktop
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18797 AER_CORE_TOKEN_FILE=$L/data/core.token \
+  AER_DESKTOP_DATA_DIR=$L/desktop AER_SCREENSHOT_DIR=$L/shots AER_POWER_LAB=$L AER_POWER_LAB_TOOLS=$PWD/../../tools/power-lab \
+  flutter test integration_test/power_live_test.dart -d linux
+```
+Стенд отказывается запускать агента с `"execute": true`; Magic Packet уходит только на 127.0.0.1. Остановка — `kill` PID из `$L/lab.json` (не `pkill`).

@@ -3,21 +3,14 @@
 Обновлено: 2026-10-28.
 
 ## M07 Remote — DONE
-Коммиты `4066866..185205d`. Повторная финальная проверка 2026-10-28 пройдена (Go, Flutter 176, release, контракт 0.8.0, поиск секретов). UNVERIFIED — см. `docs/M07_REMOTE_REPORT.md`.
+Коммиты `4066866..185205d`. UNVERIFIED — см. `docs/M07_REMOTE_REPORT.md`.
 
-## M08 Power — IN_PROGRESS
-Разрешено владельцем 2026-10-28. S-Power выполняется внутри M08 как исследование только на чтение (как S-Remote в M07).
+## M08 Power — DONE по ПО; живая приёмка — PENDING (нужно согласие и присутствие владельца)
+Коммиты `b771ada` (Core, контракт 0.9.0, ADR-014), `93d4f49` (агент), `14cb500` (Flutter), `5286e84` (стенд, исправление Monitoring, производительность), затем документация. S-Power выполнен внутри M08 только чтением.
 
-Запрещено без отдельного разрешения: реальные WoL-пакеты в сеть, shutdown/reboot/suspend, efibootmgr --bootnext, grub-reboot, bcdedit, изменение GRUB/rEFInd/UEFI/BitLocker/Secure Boot, установка служб/sudoers.
+Выполнено: модуль Core `power`, агент `aer-power-host`, раздел «Питание» и панель в доме, контрактные/модульные/сквозные тесты, живой стенд `tools/power-lab` (только SIMULATED и WoL на 127.0.0.1), замеры, документы (`POWER.md`, `POWER_CONNECT.md`, `USER_GUIDE_POWER.md`, `S_POWER_FEASIBILITY.md`, `M08_POWER_REPORT.md`).
 
-План (отмечать по мере выполнения):
-- [x] S-Power: инвентаризация загрузчика/SB/NIC/BitLocker (только чтение), реальные детали — в `docs/private/LOCAL_NOTES.md`
-- [x] Core: config `power`, модуль `power` (WoL, задания, политика, аудит), kind=power в Monitoring, ADR-014
-- [x] Агент `aer-power-host` (фиксированные адаптеры linux/windows, по умолчанию check mode), инвентаризация на реальном ПК проверена (только чтение)
-- [x] OpenAPI 0.9.0 + контрактный тест (Magic Packet на тестовый приёмник 127.0.0.1)
-- [x] Flutter: раздел «Питание», панель в доме, 11 тестов (всего 187)
-- [x] Живая проверка: Core + агент (check mode) + UDP-приёмник WoL 127.0.0.1 + Flutter integration_test, замеры (tools/power-lab)
-- [ ] Документы: S_POWER_FEASIBILITY, POWER_DUALBOOT, ADR-014, M08 report, user guide, ROADMAP, MODULES
+Не выполнялось и запрещено без отдельного разрешения: реальные WoL в сеть, shutdown/reboot/suspend, BootNext/bcdedit, изменения GRUB/rEFInd/UEFI/BitLocker/Secure Boot/sudoers, установка служб.
 
 ## Следующий шаг
-См. первый неотмеченный пункт плана.
+M09 (Network + TV) — **не начинать без команды владельца**. Отдельно, по согласию владельца: живая приёмка M08 по `docs/POWER_DUALBOOT.md` → «Приёмка».

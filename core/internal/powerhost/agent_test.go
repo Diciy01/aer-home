@@ -201,7 +201,7 @@ func TestPlanWindows(t *testing.T) {
 	if inv.OS != "windows" || inv.SecureBoot != "enabled" || inv.BitLocker != "off" || !inv.Actions["bootNext"].Supported || inv.Actions["suspend"].Supported {
 		t.Fatalf("windows inventory: %+v", inv)
 	}
-	steps, err := h.Plan(Command{Action: "switch_os", EntryID: "{a0000000-0000-4000-8000-000000000002}", TargetOS: "linux"}, inv)
+	steps, err := h.Plan(Command{Action: "switch_os", EntryID: "{A0000000-0000-4000-8000-000000000002}", TargetOS: "linux"}, inv)
 	want := [][]string{{"bcdedit", "/set", "{fwbootmgr}", "bootsequence", "{a0000000-0000-4000-8000-000000000002}"},
 		{"shutdown.exe", "/r", "/t", "30", "/c", "AER HOME: перезагрузка по команде владельца"}}
 	if err != nil || !slices.EqualFunc(argvs(steps), want, slices.Equal) {

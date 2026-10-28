@@ -56,4 +56,4 @@ SQLite WAL на этапе MVP; миграции идемпотентные и �
 - HTTP API prefix `/api/v1`; OpenAPI source of truth; versioned capabilities.
 
 ## ADRs перед реализацией
-ADR-001: Go/SQLite; ADR-002: Flutter+Flame; ADR-003: remote provider после SPIKE; ADR-004: cross-OS boot control после проверки реального GRUB/UEFI; ADR-005: iOS scene rendering choice after prototype.
+ADR-001: Go/SQLite; ADR-002: Flutter+Flame; ADR-003: remote provider после SPIKE; ADR-004 → ADR-014: питание и смена ОС (UEFI BootNext через агент, M08); ADR-005: iOS scene rendering choice after prototype.
