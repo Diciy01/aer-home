@@ -7,12 +7,17 @@
 // pair with the printed code.
 //
 //	aer-remotelab            # prints one JSON line, runs until stdin closes or SIGTERM
+//	aer-remotelab -rdp 127.0.0.1:PORT -rdp-cert server.crt -rdp-key server.key
+//	                         # the agent relays to a REAL RDP server on loopback
+//	                         # (e.g. the FreeRDP sample server, M10 on Windows)
 package main
 
 import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -21,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -42,7 +48,22 @@ func main() {
 	}
 }
 
+var (
+	realRDP = flag.String("rdp", "", "use this REAL RDP server on loopback (127.0.0.1:port) instead of the fake one")
+	rdpCert = flag.String("rdp-cert", "", "with -rdp: the server's certificate (PEM), pinned by the agent")
+	rdpKey  = flag.String("rdp-key", "", "with -rdp: the server's key (PEM), for the agent's file channel")
+)
+
 func run() error {
+	flag.Parse()
+	if (*realRDP != "") != (*rdpCert != "" && *rdpKey != "") {
+		return errors.New("-rdp needs -rdp-cert and -rdp-key")
+	}
+	if *realRDP != "" {
+		if h, _, err := net.SplitHostPort(*realRDP); err != nil || !net.ParseIP(h).IsLoopback() {
+			return errors.New("-rdp: a loopback address (the stand never leaves 127.0.0.1)")
+		}
+	}
 	dir, err := os.MkdirTemp("", "aer-remotelab-")
 	if err != nil {
 		return err
@@ -126,26 +147,40 @@ func run() error {
 	gwURL := "https://" + gln.Addr().String()
 	fp, _ := g.Fingerprint()
 
-	rdp, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
+	var rdpPort int
 	var live atomic.Int32
-	go func() {
-		for {
-			conn, err := rdp.Accept()
-			if err != nil {
-				return
-			}
-			live.Add(1)
-			go func() {
-				defer live.Add(-1)
-				defer conn.Close()
-				_, _ = io.WriteString(conn, "HOST Домашний ПК (стенд)\n")
-				_, _ = io.Copy(conn, conn)
-			}()
+	if *realRDP != "" {
+		// A real RDP server already listening on loopback (e.g. the FreeRDP
+		// sample server); the agent pins its certificate.
+		_, p, err := net.SplitHostPort(*realRDP)
+		if err != nil {
+			return fmt.Errorf("-rdp: %w", err)
 		}
-	}()
+		if rdpPort, err = strconv.Atoi(p); err != nil {
+			return fmt.Errorf("-rdp: %w", err)
+		}
+	} else {
+		rdp, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		rdpPort = rdp.Addr().(*net.TCPAddr).Port
+		go func() {
+			for {
+				conn, err := rdp.Accept()
+				if err != nil {
+					return
+				}
+				live.Add(1)
+				go func() {
+					defer live.Add(-1)
+					defer conn.Close()
+					_, _ = io.WriteString(conn, "HOST Домашний ПК (стенд)\n")
+					_, _ = io.Copy(conn, conn)
+				}()
+			}
+		}()
+	}
 	fl, _ := net.Listen("tcp", "127.0.0.1:0")
 	filesPort := fl.Addr().(*net.TCPAddr).Port
 	fl.Close()
@@ -155,8 +190,8 @@ func run() error {
 		return err
 	}
 	acfg := remotehost.Config{CoreURL: coreURL, TokenFile: hostTok, StateDir: filepath.Join(dir, "agent"), Backend: "gnome-rdp",
-		Grdctl: []string{"grdctl"}, Daemon: []string{self}, Address: "192.0.2.10", Port: rdp.Addr().(*net.TCPAddr).Port,
-		RDPUser: "aer", Approval: "auto", Clipboard: true,
+		Grdctl: []string{"grdctl"}, Daemon: []string{self}, Address: "192.0.2.10", Port: rdpPort,
+		RDPUser: "aer", Approval: "auto", Clipboard: true, TLSCert: *rdpCert, TLSKey: *rdpKey,
 		Files:      remotehost.Files{Enabled: true, Dir: filepath.Join(dir, "exchange"), Port: filesPort, MaxBytes: 1 << 20},
 		GatewayURL: gwURL, GatewayCertSHA256: fp}
 	a, err := remotehost.New(acfg, quiet)
@@ -165,7 +200,9 @@ func run() error {
 	}
 	a.SetRunner(func(context.Context, []string) ([]byte, error) { return []byte("RDP:\n\tStatus: disabled\n"), nil },
 		func([]string) (func(), error) { return func() {}, nil })
-	a.Connections = func() int { return int(live.Load()) }
+	if *realRDP == "" {
+		a.Connections = func() int { return int(live.Load()) }
+	} // else: the agent counts real connections to the port (Linux/Windows)
 	go func() { _ = a.Run(ctx) }()
 
 	var pair struct {

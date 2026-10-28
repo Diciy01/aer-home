@@ -49,8 +49,9 @@ abstract interface class CredentialStore {
   String get description;
 }
 
-/// The OS secret store: libsecret (GNOME Keyring) on Linux, Credential
-/// Manager on Windows (UNVERIFIED until M10).
+/// The OS secret store: libsecret (GNOME Keyring) on Linux; on Windows a
+/// DPAPI-encrypted file (current user) in `%APPDATA%\home.aer\AER HOME` —
+/// checked live in M10 (integration_test/secure_store_live_test.dart).
 class SecureCredentialStore implements CredentialStore {
   SecureCredentialStore([FlutterSecureStorage? storage])
     : _s = storage ?? const FlutterSecureStorage();

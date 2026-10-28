@@ -117,16 +117,17 @@ class RdpNative {
 
   static RdpNative? _cached;
 
-  /// Loads the library: `AER_RDP_LIB`, then `lib/libaer_rdp.so` next to the
-  /// executable (Flutter bundle), then the loader's search path. Null when
-  /// it is missing — the UI then offers the external client.
+  /// Loads the library: `AER_RDP_LIB`, then the Flutter bundle
+  /// (`lib/libaer_rdp.so`; on Windows `aer_rdp.dll` beside the exe, by full
+  /// path), then the loader's search path. Null when it is missing — the UI
+  /// then offers the external client.
   static RdpNative? load() {
     if (_cached != null) return _cached;
     final name = Platform.isWindows ? 'aer_rdp.dll' : 'libaer_rdp.so';
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     for (final path in [
       Platform.environment['AER_RDP_LIB'],
-      '$exeDir/lib/$name',
+      Platform.isWindows ? '$exeDir\\$name' : '$exeDir/lib/$name',
       name,
     ]) {
       if (path == null || path.isEmpty) continue;

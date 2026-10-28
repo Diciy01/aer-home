@@ -26,7 +26,10 @@
 #include <freerdp/input.h>
 #include <freerdp/settings.h>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#include <winpr/crypto.h>
+#include <winpr/path.h>
+#else
 #include <ftw.h>
 #include <unistd.h>
 #endif
@@ -491,7 +494,31 @@ AerRdp* aer_rdp_new(void)
 	return r;
 }
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+/* A fresh directory under %TEMP% (same role as mkdtemp): without it FreeRDP
+ * would use %APPDATA%\FreeRDP, whose known_hosts2 is consulted before
+ * VerifyCertificateEx and could accept a host the pin would reject. */
+static BOOL make_private_dir(char* out, size_t cap)
+{
+	char base[MAX_PATH];
+	DWORD n = GetTempPathA(sizeof(base), base);
+	if (n == 0 || n >= sizeof(base))
+		return FALSE;
+	for (int i = 0; i < 16; i++)
+	{
+		UINT32 rnd[2];
+		if (winpr_RAND(rnd, sizeof(rnd)) < 0)
+			return FALSE;
+		snprintf(out, cap, "%saer-rdp-%08x%08x", base, rnd[0], rnd[1]);
+		if (CreateDirectoryA(out, NULL)) /* inherits the user-only ACL of %TEMP% */
+			return TRUE;
+		if (GetLastError() != ERROR_ALREADY_EXISTS)
+			break;
+	}
+	out[0] = '\0';
+	return FALSE;
+}
+#else
 static int remove_entry(const char* path, const struct stat* sb, int flag, struct FTW* ftw)
 {
 	(void)sb;
@@ -514,7 +541,14 @@ int aer_rdp_connect(AerRdp* r, const char* host, int port, const char* user, con
 		return -1;
 	}
 	r->clip_allowed = clipboard != 0;
-#if !defined(_WIN32)
+#if defined(_WIN32)
+	if (!make_private_dir(r->cfgdir, sizeof(r->cfgdir)))
+	{
+		set_error(r, "could not create a private FreeRDP config directory");
+		r->state = AER_RDP_FAILED;
+		return -1;
+	}
+#else
 	snprintf(r->cfgdir, sizeof(r->cfgdir), "%s/aer-rdp-XXXXXX",
 	         getenv("TMPDIR") ? getenv("TMPDIR") : "/tmp");
 	if (!mkdtemp(r->cfgdir))
@@ -544,6 +578,10 @@ int aer_rdp_connect(AerRdp* r, const char* host, int port, const char* user, con
 	          freerdp_settings_set_uint32(s, FreeRDP_ColorDepth, 32) &&
 	          freerdp_settings_set_bool(s, FreeRDP_SoftwareGdi, TRUE) &&
 	          freerdp_settings_set_bool(s, FreeRDP_SupportGraphicsPipeline, TRUE) &&
+	          /* Fallback when the server has no GFX (FreeRDP server/shadow,
+	           * the base of windows-shadow): surface bits with RemoteFX/NSC. */
+	          freerdp_settings_set_bool(s, FreeRDP_RemoteFxCodec, TRUE) &&
+	          freerdp_settings_set_bool(s, FreeRDP_NSCodec, TRUE) &&
 	          freerdp_settings_set_bool(s, FreeRDP_RedirectClipboard, r->clip_allowed) &&
 	          freerdp_settings_set_bool(s, FreeRDP_AutoAcceptCertificate, FALSE) &&
 	          freerdp_settings_set_bool(s, FreeRDP_IgnoreCertificate, FALSE) &&
@@ -671,10 +709,14 @@ void aer_rdp_free(AerRdp* r)
 	}
 	if (r->ctx)
 		freerdp_client_context_free(r->ctx);
-#if !defined(_WIN32)
 	if (r->cfgdir[0])
+	{
+#if defined(_WIN32)
+		(void)winpr_RemoveDirectory_RecursiveA(r->cfgdir);
+#else
 		(void)nftw(r->cfgdir, remove_entry, 8, FTW_DEPTH | FTW_PHYS);
 #endif
+	}
 	(void)CloseHandle(r->stop);
 	(void)CloseHandle(r->wake);
 	DeleteCriticalSection(&r->lock);

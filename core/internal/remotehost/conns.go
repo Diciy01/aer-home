@@ -9,8 +9,12 @@ import (
 )
 
 // established counts ESTABLISHED TCP connections to a local port, from
-// /proc/net/tcp{,6} (Linux). -1 means "cannot tell on this OS".
+// /proc/net/tcp{,6} (Linux) or the IP Helper TCP tables (Windows). -1
+// means "cannot tell on this OS".
 func established(port int) int {
+	if runtime.GOOS == "windows" {
+		return establishedWindows(port)
+	}
 	if runtime.GOOS != "linux" {
 		return -1
 	}

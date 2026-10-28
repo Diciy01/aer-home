@@ -87,6 +87,34 @@ if(PLUGIN_BUNDLED_LIBRARIES)
     COMPONENT Runtime)
 endif()
 
+# Built-in remote viewer (M14.3/M10, ADR-017): native/aer_rdp over FreeRDP 3.
+# Optional, as on Linux: FreeRDP is found in AER_FREERDP_PREFIX, else in
+# $VCPKG_ROOT/installed/x64-windows (vcpkg freerdp[client]); without it the
+# app is built as before and uses the external RDP client (mstsc).
+set(AER_FREERDP_PREFIX "$ENV{AER_FREERDP_PREFIX}")
+if(NOT AER_FREERDP_PREFIX AND DEFINED ENV{VCPKG_ROOT})
+  set(AER_FREERDP_PREFIX "$ENV{VCPKG_ROOT}/installed/x64-windows")
+endif()
+if(AER_FREERDP_PREFIX AND EXISTS "${AER_FREERDP_PREFIX}/share/freerdp-client3"
+   AND NOT CMAKE_VERSION VERSION_LESS 3.21)
+  file(TO_CMAKE_PATH "${AER_FREERDP_PREFIX}" AER_FREERDP_PREFIX)
+  list(APPEND CMAKE_PREFIX_PATH "${AER_FREERDP_PREFIX}")
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../native/aer_rdp" "${CMAKE_BINARY_DIR}/aer_rdp")
+  # aer_rdp.dll and the FreeRDP/OpenSSL DLLs it needs go next to the exe
+  # (Windows has no rpath; the exe directory is searched first).
+  install(TARGETS aer_rdp RUNTIME_DEPENDENCY_SET aer_rdp_deps
+    RUNTIME DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+  install(RUNTIME_DEPENDENCY_SET aer_rdp_deps
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+    DIRECTORIES "${AER_FREERDP_PREFIX}/bin"
+    PRE_EXCLUDE_REGEXES "^api-ms-" "^ext-ms-"
+    POST_EXCLUDE_REGEXES "[Ss]ystem32"
+    COMPONENT Runtime)
+  message(STATUS "Built-in remote viewer: FreeRDP from ${AER_FREERDP_PREFIX}")
+else()
+  message(STATUS "FreeRDP 3 not found (AER_FREERDP_PREFIX/VCPKG_ROOT): built-in remote viewer disabled")
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/windows/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"
