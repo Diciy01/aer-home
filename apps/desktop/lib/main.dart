@@ -15,6 +15,7 @@ import 'src/core_api/registry_api.dart';
 import 'src/scene/repository/scene_repository.dart';
 import 'src/scene/scene_controller.dart';
 import 'src/state/app_section.dart';
+import 'src/state/desktop_notifications.dart';
 import 'src/state/bots_controller.dart';
 import 'src/state/network_controller.dart';
 import 'src/state/power_controller.dart';
@@ -91,12 +92,14 @@ void main() {
     typeLabel: (t) => registry.catalog?.typeLabel(t) ?? t,
     capabilityLabel: (c) => registry.catalog?.capabilityLabel(c) ?? c,
   );
+  final section = AppSectionController();
+  if (Platform.isWindows) DesktopNotifications(monitoring, section).start();
   runApp(
     AerHomeApp(
       connection: connection,
       registry: registry,
       scene: scene,
-      section: AppSectionController(),
+      section: section,
       monitoring: monitoring,
       bots: bots,
       remote: remote,

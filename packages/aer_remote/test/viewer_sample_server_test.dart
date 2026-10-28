@@ -31,8 +31,9 @@ final Object _skip =
     _server == null ||
         _env['AER_RDP_LIB'] == null ||
         _env['AER_RDP_SAMPLE_CERT'] == null ||
-        _env['AER_RDP_SAMPLE_KEY'] == null
-    ? 'set AER_RDP_LIB, AER_RDP_SAMPLE_SERVER, AER_RDP_SAMPLE_CERT, AER_RDP_SAMPLE_KEY'
+        _env['AER_RDP_SAMPLE_KEY'] == null ||
+        _env['AER_RDP_SAMPLE_LOOPBACK_ONLY'] != '1'
+    ? 'set sample/lib/cert/key and AER_RDP_SAMPLE_LOOPBACK_ONLY=1 only for a loopback-patched server'
     : false;
 
 const _ptrMove = 0x0800; // PTR_FLAGS_MOVE

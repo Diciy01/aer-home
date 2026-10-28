@@ -19,8 +19,9 @@ void main() {
 
   test('secret round trip through the OS store, nothing in plain text', () async {
     const storage = FlutterSecureStorage();
-    const key = 'aer-home.test.secure-store-live';
     final rnd = Random.secure();
+    final key =
+        'aer-home.test.secure-store-live.${DateTime.now().microsecondsSinceEpoch}.${rnd.nextInt(1 << 30)}';
     final secret =
         'aerc1.test.${List.generate(32, (_) => rnd.nextInt(16).toRadixString(16)).join()}';
     try {
