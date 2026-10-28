@@ -334,6 +334,32 @@ func TestInternetUpDownDNSAndUnconfigured(t *testing.T) {
 	}
 }
 
+// TestInternetTLSDefeatsLocalAccept: a local VPN/TUN that accepts every TCP
+// connection must not make the internet look up — TLS targets need a real
+// handshake (found live on the main PC: TCP 0.3 ms, TLS ~300 ms).
+func TestInternetTLSDefeatsLocalAccept(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	defer srv.Close()
+	plain := listener(t) // accepts TCP and hangs up: like a TUN fake accept
+	cfg := baseCfg()
+	cfg.Internet.Targets = []string{"tls://" + srv.Listener.Addr().String()}
+	f := newFx(t, cfg)
+	f.svc.RunChecks(f.ctx)
+	if c := f.overview(t).Internet; c.Status != StatusUp {
+		t.Fatalf("tls up: %+v", c)
+	}
+	r := probeInternet(f.ctx, f.svc.dial, []string{"tls://" + plain, "tls://127.0.0.1:1"}, time.Second)
+	if r.ok || !strings.Contains(r.details.Targets[0].Error, "VPN/прокси") || r.details.Targets[1].OK {
+		t.Fatalf("fake accept / refused over TLS must fail: %+v %+v", r, r.details.Targets)
+	}
+	if a, tlsOn := splitTarget("1.1.1.1:443"); a != "1.1.1.1:443" || !tlsOn {
+		t.Fatal("443 implies TLS")
+	}
+	if _, tlsOn := splitTarget("tcp://1.1.1.1:443"); tlsOn {
+		t.Fatal("tcp:// forces TCP")
+	}
+}
+
 func TestSecretsAreRedactedBeforeStorage(t *testing.T) {
 	f := newFx(t, baseCfg())
 	f.svc.settle(f.ctx, target{key: "internet", kind: "internet", name: "Интернет", severity: monitoring.SeverityCritical},
@@ -468,7 +494,8 @@ func TestRouterUPnPReadOnly(t *testing.T) {
 			t.Fatalf("wan down: %+v", x.WAN)
 		}
 	}
-	if o.Summary.Level != "critical" || len(f.active(t, "network:router:"+r.ID)) != 1 {
+	if o.Summary.Level != "critical" || o.Summary.Title != "Роутер «Роутер (тест)» сообщает: WAN не подключён" ||
+		len(f.active(t, "network:router:"+r.ID)) != 1 {
 		t.Fatalf("summary/incident: %+v", o.Summary)
 	}
 	// SOAP fault, no description, missing service, control URL off the router.
@@ -522,6 +549,7 @@ func TestConfigValidation(t *testing.T) {
 	bad := []func(*config.Network){
 		func(c *config.Network) { c.Internet.Targets = []string{"1.1.1.1"} },
 		func(c *config.Network) { c.Internet.Targets = []string{"host:99999"} },
+		func(c *config.Network) { c.Internet.Targets = []string{"tls://nohost"} },
 		func(c *config.Network) {
 			c.Sunshine = []config.SunshineInstance{{ID: "a", ServerInfoURL: "http://user:pw@127.0.0.1:47989"}}
 		},

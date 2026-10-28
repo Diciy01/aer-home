@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -38,6 +39,8 @@ func shortErr(err error) string {
 	switch {
 	case err == nil:
 		return "нет ответа"
+	case errors.Is(err, errTLS):
+		return "TCP принят, но TLS не установлен — вероятно, соединение принял локальный VPN/прокси, а не сервер"
 	case errors.As(err, &dns):
 		return "имя не разрешается (DNS)"
 	case errors.Is(err, context.DeadlineExceeded), strings.Contains(err.Error(), "timeout"):
@@ -57,8 +60,53 @@ func shortErr(err error) string {
 // Dialer abstracts TCP connects (tests use the real loopback anyway).
 type Dialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// probeInternet: the link works if any explicit target answers. A refused
-// connection is an answer from the remote host, so it counts.
+// splitTarget: "tls://host:port" or "host:443" → TLS handshake; "tcp://…"
+// or another port → TCP connect only.
+func splitTarget(t string) (addr string, useTLS bool) {
+	switch {
+	case strings.HasPrefix(t, "tls://"):
+		return strings.TrimPrefix(t, "tls://"), true
+	case strings.HasPrefix(t, "tcp://"):
+		return strings.TrimPrefix(t, "tcp://"), false
+	}
+	_, port, _ := net.SplitHostPort(t)
+	return t, port == "443"
+}
+
+// reach proves one target. A TCP accept alone can come from a local VPN or
+// transparent proxy (TUN) that answers for every address, so TLS targets
+// must also finish a handshake — only a real server on the far side can.
+// The certificate is not verified (nothing is sent; IPs have no name).
+func reach(ctx context.Context, dial Dialer, target string) (time.Duration, error) {
+	addr, useTLS := splitTarget(target)
+	start := time.Now()
+	c, err := dial(ctx, "tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer c.Close()
+	if !useTLS {
+		return time.Since(start), nil
+	}
+	host, _, _ := net.SplitHostPort(addr)
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true} //nolint:gosec // liveness only
+	if net.ParseIP(host) == nil {
+		cfg.ServerName = host
+	}
+	tc := tls.Client(c, cfg)
+	if dl, ok := ctx.Deadline(); ok {
+		_ = c.SetDeadline(dl)
+	}
+	if err := tc.HandshakeContext(ctx); err != nil {
+		return 0, errTLS
+	}
+	return time.Since(start), nil
+}
+
+var errTLS = errors.New("tls handshake failed")
+
+// probeInternet: the link works if any explicit target answers. For TCP
+// targets a refused connection is an answer from the remote host.
 func probeInternet(ctx context.Context, dial Dialer, targets []string, timeout time.Duration) result {
 	if len(targets) == 0 {
 		return result{status: StatusUnconfigured, reason: "Не настроено: укажите цели network.internet.targets в конфигурации Core"}
@@ -73,12 +121,7 @@ func probeInternet(ctx context.Context, dial Dialer, targets []string, timeout t
 	ch := make(chan one, len(targets))
 	for i, t := range targets {
 		go func() {
-			start := time.Now()
-			c, err := dial(ctx, "tcp", t)
-			d := time.Since(start)
-			if err == nil {
-				c.Close()
-			}
+			d, err := reach(ctx, dial, t)
 			ch <- one{i, err, d}
 		}()
 	}
@@ -88,7 +131,8 @@ func probeInternet(ctx context.Context, dial Dialer, targets []string, timeout t
 	for range targets {
 		o := <-ch
 		r := TargetResult{Target: targets[o.i]}
-		if o.err == nil || errors.Is(o.err, syscall.ECONNREFUSED) {
+		_, isTLS := splitTarget(targets[o.i])
+		if o.err == nil || (!isTLS && errors.Is(o.err, syscall.ECONNREFUSED)) {
 			d := o.d
 			r.OK, r.LatencyMs = true, ms(&d)
 			if best == nil || d < *best {

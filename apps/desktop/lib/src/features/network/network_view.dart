@@ -534,7 +534,7 @@ class InternetCard extends StatelessWidget {
       key: const Key('net-internet'),
       icon: Icons.public_rounded,
       title: 'Интернет',
-      subtitle: 'TCP-проверка заданных целей',
+      subtitle: 'Проверка заданных целей (TLS на :443, иначе TCP)',
       status: c.status,
       stale: stale || c.stale,
       children: [
@@ -759,7 +759,7 @@ class SunshineCard extends StatelessWidget {
           ),
         _Facts([
           ('Ответ', fmtMs(c.latencyMs)),
-          ('Последний ответ', _when(c.lastOkAt)),
+          ('Последний успех', _when(c.lastOkAt)),
           (
             'Веб-интерфейс',
             switch (x?.webReachable) {

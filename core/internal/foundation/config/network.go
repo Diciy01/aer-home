@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // Network configures M09 Network + TV: the internet check, read-only router
@@ -17,7 +18,8 @@ type Network struct {
 	TimeoutSec  int `json:"timeoutSec"`
 	// FailuresBeforeDown: consecutive failed checks before "down".
 	FailuresBeforeDown int `json:"failuresBeforeDown"`
-	// Internet: explicit TCP targets ("host:port"); empty = not configured.
+	// Internet: explicit targets "host:port" (port 443 or "tls://" → TLS
+	// handshake, "tcp://" or other ports → TCP connect); empty = not configured.
 	Internet NetInternet `json:"internet"`
 	// Routers: optional read-only adapters for Registry router entities.
 	Routers []NetRouter `json:"routers"`
@@ -85,7 +87,7 @@ func (n Network) Validate() error {
 		errs = append(errs, errors.New("network.internet.targets: at most 8"))
 	}
 	for _, t := range n.Internet.Targets {
-		h, p, err := net.SplitHostPort(t)
+		h, p, err := net.SplitHostPort(strings.TrimPrefix(strings.TrimPrefix(t, "tls://"), "tcp://"))
 		if port, perr := strconv.Atoi(p); err != nil || h == "" || perr != nil || port < 1 || port > 65535 {
 			errs = append(errs, fmt.Errorf("network.internet.targets: %q, want host:port", t))
 		}

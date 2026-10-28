@@ -87,9 +87,9 @@ func (s *Service) targets() []target {
 		if r.UPnPURL == "" {
 			continue
 		}
-		name := "WAN роутера"
+		name := "Роутер (WAN)"
 		if e, err := s.reg.Get(context.Background(), r.EntityID); err == nil {
-			name = "WAN: " + e.Name
+			name = "Роутер «" + e.Name + "» (WAN)"
 		}
 		out = append(out, target{key: "router:" + r.EntityID, kind: "router_wan", name: name, entityID: r.EntityID,
 			severity: monitoring.SeverityCritical,
@@ -403,7 +403,7 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 				AdapterNote: "Только доступность и задержка: API роутера для чтения не настроен (поддерживается UPnP IGD, если он включён на роутере)"}
 			if a, ok := adapters[e.ID]; ok && a.UPnPURL != "" {
 				rv.Adapter, rv.AdapterNote = "upnp", "UPnP IGD: только чтение состояния WAN"
-				w := s.checkOr(ctx, "router:"+e.ID, "router_wan", "WAN: "+e.Name, e.ID, "")
+				w := s.checkOr(ctx, "router:"+e.ID, "router_wan", "Роутер «"+e.Name+"» (WAN)", e.ID, "")
 				rv.WAN = &w
 			}
 			o.Routers = append(o.Routers, rv)
@@ -478,9 +478,14 @@ func summarize(o Overview, devices int) Summary {
 			s.Issues = append(s.Issues, "Роутер «"+r.Device.Name+"» не отвечает")
 			worse("critical")
 		}
-		if r.WAN != nil && (r.WAN.Status == StatusDown || r.WAN.Status == StatusError) {
-			s.Issues = append(s.Issues, r.WAN.Name+": "+r.WAN.Reason)
-			worse(map[Status]string{StatusDown: "critical", StatusError: "warning"}[r.WAN.Status])
+		switch {
+		case r.WAN == nil:
+		case r.WAN.Status == StatusDown:
+			s.Issues = append(s.Issues, "Роутер «"+r.Device.Name+"» сообщает: WAN не подключён")
+			worse("critical")
+		case r.WAN.Status == StatusError:
+			s.Issues = append(s.Issues, "Роутер «"+r.Device.Name+"»: состояние WAN не получено")
+			worse("warning")
 		}
 	}
 	down := 0
@@ -494,8 +499,12 @@ func summarize(o Overview, devices int) Summary {
 		worse("warning")
 	}
 	for _, sh := range o.Sunshine {
-		if sh.Check.Status == StatusDown || sh.Check.Status == StatusError {
-			s.Issues = append(s.Issues, sh.Name+": "+sh.Check.Reason)
+		switch sh.Check.Status {
+		case StatusDown:
+			s.Issues = append(s.Issues, "Sunshine «"+sh.Name+"» не отвечает")
+			worse("warning")
+		case StatusError:
+			s.Issues = append(s.Issues, "Sunshine «"+sh.Name+"»: ошибка проверки")
 			worse("warning")
 		}
 	}
