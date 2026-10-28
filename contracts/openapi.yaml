@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.8.0
+  version: 0.9.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -29,6 +29,13 @@ info:
     sessions (pending … revoked) with a one-time grant, revoke, audit; host agent protocol
     (agentAuth, kind=remote: hello, long-poll commands, session events). Agent kind `remote`.
     Video/input/files never pass through Core. See docs/adr/ADR-013-remote-transport.md.
+    0.9.0 — Power (M08) under /power: devices over Registry (state from Monitoring and power agents),
+    Wake-on-LAN target (MAC, LAN destination, interface) sent by Core, owner policy, actions
+    wake/shutdown/reboot/suspend/switch_os/check from a closed list with single-use confirmation +
+    Idempotency-Key + audit, asynchronous jobs (queued … simulated) with cancel while queued;
+    host agent protocol (agentAuth, kind=power: hello with boot inventory, long-poll commands, job
+    events). Agent kind `power`, Registry capability `power.suspend`. Additive.
+    See docs/adr/ADR-014-power.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -1374,6 +1381,363 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /power/devices:
+    get:
+      x-aer-status: implemented
+      summary: "Power-manageable computers: state, OS, WoL target, policy, available actions with reasons"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PowerDevice' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /power/devices/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "One device"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /power/devices/{id}/policy:
+    put:
+      x-aer-status: implemented
+      summary: "Owner policy; switching an action off withdraws its queued jobs"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PowerPolicy' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /power/devices/{id}/wol:
+    put:
+      x-aer-status: implemented
+      summary: "Wake-on-LAN target: MAC, LAN destination (private/loopback/255.255.255.255 only), optional interface"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PowerWoLTarget' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+    delete:
+      x-aer-status: implemented
+      summary: "Forget the Wake-on-LAN target"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /power/devices/{id}/actions/{action}/confirm:
+    post:
+      x-aer-status: implemented
+      summary: "Preconditions, risks and a single-use confirmation token bound to device, action and target OS"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [wake, shutdown, reboot, suspend, switch_os, check] }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: false, properties: { targetOs: { type: string, enum: [linux, windows] } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerConfirmation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403':
+          description: "PERMISSION_REQUIRED: action not available now (reason in message)"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: "UNAVAILABLE: target OS not available"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /power/devices/{id}/actions/{action}:
+    post:
+      x-aer-status: implemented
+      summary: "Start an action once per Idempotency-Key (202; replay returns the same job with 200). Outcome is asynchronous"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+        - { name: action, in: path, required: true, schema: { type: string, enum: [wake, shutdown, reboot, suspend, switch_os, check] }, description: "" }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 100 }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PowerActionRequest' }
+      responses:
+        '202':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerJob' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '200':
+          description: "Replay of an Idempotency-Key: the same job, replayed=true"
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerJob' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403':
+          description: "PERMISSION_REQUIRED: no/invalid confirmation or action not available"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: "CONFLICT: key reused for another action; UNAVAILABLE: target OS"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: "UNAVAILABLE: too many active power jobs"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /power/jobs:
+    get:
+      x-aer-status: implemented
+      summary: "Job history, newest first"
+      parameters:
+        - { name: entityId, in: query, required: false, schema: { type: string }, description: "" }
+        - { name: limit, in: query, required: false, schema: { type: integer }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/PowerJob' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /power/jobs/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "Job with its audit trail"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerJob' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /power/jobs/{id}/cancel:
+    post:
+      x-aer-status: implemented
+      summary: "Cancel a job the agent has not taken yet"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PowerJob' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /power/interfaces:
+    get:
+      x-aer-status: implemented
+      summary: "Core's own network interfaces for Wake-on-LAN, whether sending is enabled, default UDP port"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [interfaces, wolEnabled, defaultPort], properties: { interfaces: { type: array, items: { $ref: '#/components/schemas/PowerInterface' } }, wolEnabled: { type: boolean }, defaultPort: { type: integer } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /power/agent/hello:
+    post:
+      x-aer-status: implemented
+      summary: "Power agent (kind=power): host facts, boot inventory, supported actions"
+      security:
+        - agentAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PowerHostInfo' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [serverTime, pollSec, helloSec], properties: { serverTime: { type: string, format: date-time }, pollSec: { type: integer }, helloSec: { type: integer } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "not a power agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /power/agent/commands:
+    get:
+      x-aer-status: implemented
+      summary: "Power agent long-poll for commands of the closed list"
+      security:
+        - agentAuth: []
+      parameters:
+        - { name: wait, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 25 }, description: "seconds" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [commands], properties: { commands: { type: array, items: { $ref: '#/components/schemas/PowerCommand' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "not a power agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /power/agent/jobs/{id}/events:
+    post:
+      x-aer-status: implemented
+      summary: "Power agent reports on a job of its own device"
+      security:
+        - agentAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PowerAgentEvent' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [state], properties: { state: { $ref: '#/components/schemas/PowerJobState' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: "not a power agent"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -1757,7 +2121,7 @@ components:
         id: { type: string, format: uuid }
         entityId: { type: string, format: uuid }
         name: { type: string }
-        kind: { type: string, enum: [host, bot, remote] }
+        kind: { type: string, enum: [host, bot, remote, power] }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: [string, 'null'], format: date-time }
         lastSeenAt: { type: [string, 'null'], format: date-time }
@@ -1771,7 +2135,7 @@ components:
       properties:
         entityId: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 80 }
-        kind: { type: string, enum: [host, bot, remote] }
+        kind: { type: string, enum: [host, bot, remote, power] }
     CreatedAgent:
       type: object
       required: [agent, token]
@@ -2483,4 +2847,191 @@ components:
         event: { type: string, enum: [awaiting_approval, approved, denied, ready, connected, disconnected, closed, failed] }
         password: { type: string, description: only with ready; kept in Core memory until the one-time grant }
         filesToken: { type: string }
+        message: { type: string }
+    PowerJobState: { type: string, enum: [queued, sent, waiting, succeeded, failed, timeout, cancelled, simulated, rejected] }
+    PowerWoLTarget:
+      type: object
+      additionalProperties: false
+      required: [mac]
+      properties:
+        mac: { type: string, description: "unicast MAC; aa:bb:cc:dd:ee:ff, aa-bb-…, aabb.ccdd.eeff or 12 hex digits" }
+        broadcast: { type: string, description: "IPv4 LAN destination; default 255.255.255.255" }
+        interface: { type: string, description: "Core's interface to send from (optional)" }
+        port: { type: integer, description: "0 = power.wol.port" }
+    PowerPolicy:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled: { type: boolean }
+        wake: { type: boolean }
+        shutdown: { type: boolean }
+        reboot: { type: boolean }
+        suspend: { type: boolean }
+        switchOs: { type: boolean, description: off by default }
+        allowWithBitLocker: { type: boolean }
+        revision: { type: integer }
+    PowerBootEntry:
+      type: object
+      required: [id, label, os, current]
+      properties:
+        id: { type: string, description: "UEFI Boot#### (4 hex digits) or Windows firmware {GUID}" }
+        label: { type: string }
+        os: { type: string, enum: [linux, windows, bootmanager, other] }
+        current: { type: boolean }
+    PowerCapability:
+      type: object
+      required: [supported, reason]
+      properties:
+        supported: { type: boolean }
+        reason: { type: string }
+    PowerHostInfo:
+      type: object
+      additionalProperties: false
+      required: [os, firmware, secureBoot, bitlocker]
+      properties:
+        os: { type: string, enum: [linux, windows] }
+        osVersion: { type: string }
+        hostname: { type: string }
+        version: { type: string }
+        bootId: { type: string, description: changes on every boot }
+        dryRun: { type: boolean, description: "check mode: the agent executes nothing (default)" }
+        firmware: { type: string, enum: [uefi, bios, unknown] }
+        secureBoot: { type: string, enum: [enabled, disabled, unknown] }
+        bitlocker: { type: string, enum: ['off', 'on', unknown, n/a] }
+        bootManager: { type: string }
+        bootEntries: { type: [array, 'null'], items: { $ref: '#/components/schemas/PowerBootEntry' } }
+        macs: { type: [array, 'null'], items: { type: string } }
+        actions:
+          type: [object, 'null']
+          description: "keys shutdown, reboot, suspend, bootNext"
+          additionalProperties: { $ref: '#/components/schemas/PowerCapability' }
+    PowerAgent:
+      type: object
+      required: [agentId, name, active, lastHelloAt, info]
+      properties:
+        agentId: { type: string }
+        name: { type: string }
+        active: { type: boolean }
+        lastHelloAt: { type: string, format: date-time }
+        info: { $ref: '#/components/schemas/PowerHostInfo' }
+    PowerTarget:
+      type: object
+      required: [os, label, entryId, available, reason]
+      properties:
+        os: { type: string, enum: [linux, windows] }
+        label: { type: string }
+        entryId: { type: string }
+        available: { type: boolean }
+        reason: { type: string }
+    PowerAction:
+      type: object
+      required: [id, label, available, reason, dangerous]
+      properties:
+        id: { type: string, enum: [wake, shutdown, reboot, suspend, switch_os, check] }
+        label: { type: string }
+        available: { type: boolean }
+        reason: { type: string }
+        dangerous: { type: boolean }
+        targets: { type: array, items: { $ref: '#/components/schemas/PowerTarget' } }
+    PowerEvent:
+      type: object
+      required: [at, kind, message]
+      properties:
+        at: { type: string, format: date-time }
+        kind: { type: string }
+        message: { type: string }
+    PowerJob:
+      type: object
+      required: [id, entityId, deviceName, action, targetOs, bootEntryId, state, message, replayed, simulated, fromOs, requestedAt,
+        sentAt, finishedAt, deadline]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        deviceName: { type: string }
+        action: { type: string, enum: [wake, shutdown, reboot, suspend, switch_os, check] }
+        targetOs: { type: string }
+        bootEntryId: { type: string }
+        state: { $ref: '#/components/schemas/PowerJobState' }
+        message: { type: string }
+        replayed: { type: boolean }
+        simulated: { type: boolean, description: "true when the agent ran in check mode (SIMULATED)" }
+        fromOs: { type: string }
+        requestedAt: { type: string, format: date-time }
+        sentAt: { type: [string, 'null'], format: date-time }
+        finishedAt: { type: [string, 'null'], format: date-time }
+        deadline: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/PowerEvent' } }
+    PowerDevice:
+      type: object
+      required: [entityId, name, type, declaredCapabilities, state, stateReason, currentOs, lastContactAt, monitoringStatus, wol,
+        sameMachineAsCore, sameMachineNote, agents, policy, actions, activeJob, lastJob]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        declaredCapabilities: { type: array, items: { type: string } }
+        state: { type: string, enum: [online, offline, waking, shutting_down, rebooting, switching, suspending, unknown] }
+        stateReason: { type: string }
+        currentOs: { type: string }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        monitoringStatus: { type: string, description: Monitoring's observation (empty when unknown) }
+        wol: { oneOf: [{ $ref: '#/components/schemas/PowerWoLTarget' }, { type: 'null' }] }
+        sameMachineAsCore: { type: boolean, description: "Core runs on this computer: it cannot wake itself" }
+        sameMachineNote: { type: string }
+        agents: { type: array, items: { $ref: '#/components/schemas/PowerAgent' } }
+        policy: { $ref: '#/components/schemas/PowerPolicy' }
+        actions: { type: array, items: { $ref: '#/components/schemas/PowerAction' } }
+        activeJob: { oneOf: [{ $ref: '#/components/schemas/PowerJob' }, { type: 'null' }] }
+        lastJob: { oneOf: [{ $ref: '#/components/schemas/PowerJob' }, { type: 'null' }] }
+    PowerCheck:
+      type: object
+      required: [name, ok, message]
+      properties:
+        name: { type: string }
+        ok: { type: boolean }
+        message: { type: string }
+    PowerConfirmation:
+      type: object
+      required: [token, entityId, action, targetOs, summary, risks, checks, expiresAt]
+      properties:
+        token: { type: string }
+        entityId: { type: string, format: uuid }
+        action: { type: string }
+        targetOs: { type: string }
+        summary: { type: string }
+        risks: { type: array, items: { type: string } }
+        checks: { type: array, items: { $ref: '#/components/schemas/PowerCheck' } }
+        expiresAt: { type: string, format: date-time }
+    PowerActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        confirmationToken: { type: string, description: required for every action except check }
+        targetOs: { type: string, enum: [linux, windows], description: switch_os only }
+    PowerInterface:
+      type: object
+      required: [name, mac, addresses, broadcasts, up, loopback]
+      properties:
+        name: { type: string }
+        mac: { type: string }
+        addresses: { type: array, items: { type: string } }
+        broadcasts: { type: array, items: { type: string } }
+        up: { type: boolean }
+        loopback: { type: boolean }
+    PowerCommand:
+      type: object
+      required: [id, jobId, action, expiresAt]
+      properties:
+        id: { type: string }
+        jobId: { type: string, description: empty for inventory refresh }
+        action: { type: string, enum: [shutdown, reboot, suspend, switch_os, inventory] }
+        entryId: { type: string, description: "switch_os: boot entry the agent itself reported" }
+        targetOs: { type: string }
+        expiresAt: { type: string, format: date-time }
+    PowerAgentEvent:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [accepted, executing, simulated, failed] }
         message: { type: string }

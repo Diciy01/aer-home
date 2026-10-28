@@ -40,6 +40,8 @@ type Config struct {
 	Bots Bots `json:"bots"`
 	// Remote configures the Remote access control plane (M07).
 	Remote Remote `json:"remote"`
+	// Power configures Wake-on-LAN and power/boot jobs (M08).
+	Power Power `json:"power"`
 }
 
 // EnvLookup matches os.LookupEnv so tests can inject an isolated environment.
@@ -56,6 +58,7 @@ func Default(env EnvLookup) Config {
 		Monitoring: DefaultMonitoring(),
 		Bots:       DefaultBots(),
 		Remote:     DefaultRemote(),
+		Power:      DefaultPower(),
 	}
 }
 
@@ -133,6 +136,9 @@ func (c Config) Validate() error {
 		errs = append(errs, err)
 	}
 	if err := c.Remote.Validate(); err != nil {
+		errs = append(errs, err)
+	}
+	if err := c.Power.Validate(); err != nil {
 		errs = append(errs, err)
 	}
 	return errors.Join(errs...)

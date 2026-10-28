@@ -204,6 +204,7 @@ func DefaultCatalog() *Catalog {
 		{"power.wake", "Wake-on-LAN", "Включение по сети", "power"},
 		{"power.shutdown", "Выключение", "Удалённое выключение", "power"},
 		{"power.reboot", "Перезагрузка", "Удалённая перезагрузка", "power"},
+		{"power.suspend", "Сон", "Перевод в спящий режим", "power"},
 		{"power.switch_os", "Смена ОС", "Переключение Ubuntu ↔ Windows", "power"},
 		{"docker.manage", "Управление Docker", "Старт/стоп/перезапуск контейнеров", "integrations"},
 		{"bot.restart", "Перезапуск бота", "Перезапуск после подтверждения", "bots"},
