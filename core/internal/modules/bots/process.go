@@ -29,12 +29,19 @@ type processAdapter struct {
 
 type child struct {
 	cmd       *exec.Cmd
+	control   processControl
 	entityID  string
 	startedAt time.Time
 	stopping  bool
 	done      chan struct{}
 	exitErr   error
 	cpuPrev   cpuSample
+}
+
+type processControl struct {
+	terminate func() error
+	kill      func() error
+	cleanup   func()
 }
 
 func newProcessAdapter(s *Service) *processAdapter {
@@ -112,7 +119,6 @@ func (p *processAdapter) start(ctl config.BotController, entityID string) (strin
 	cmd := exec.Command(ctl.Command[0], ctl.Command[1:]...)
 	cmd.Dir = ctl.WorkDir
 	cmd.Env = append(minimalEnv(), ctl.Env...)
-	cmd.SysProcAttr = childAttr()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return "", err
@@ -121,10 +127,11 @@ func (p *processAdapter) start(ctl config.BotController, entityID string) (strin
 	if err != nil {
 		return "", err
 	}
-	if err := cmd.Start(); err != nil {
+	control, err := startChild(cmd)
+	if err != nil {
 		return "", fmt.Errorf("не удалось запустить: %w", err)
 	}
-	c := &child{cmd: cmd, entityID: entityID, startedAt: p.s.now().UTC(), done: make(chan struct{})}
+	c := &child{cmd: cmd, control: control, entityID: entityID, startedAt: p.s.now().UTC(), done: make(chan struct{})}
 	p.mu.Lock()
 	p.procs[ctl.ID] = c
 	p.mu.Unlock()
@@ -136,6 +143,7 @@ func (p *processAdapter) start(ctl config.BotController, entityID string) (strin
 	go func() {
 		pipes.Wait()
 		err := cmd.Wait()
+		c.control.cleanup()
 		p.mu.Lock()
 		c.exitErr = err
 		stopping := c.stopping
@@ -185,7 +193,7 @@ func (p *processAdapter) stop(ctx context.Context, ctl config.BotController, ent
 	p.mu.Lock()
 	c.stopping = true
 	p.mu.Unlock()
-	if err := terminate(c.cmd); err != nil && !errors.Is(err, os.ErrProcessDone) {
+	if err := c.control.terminate(); err != nil && !errors.Is(err, os.ErrProcessDone) {
 		return "", fmt.Errorf("не удалось отправить сигнал завершения: %w", err)
 	}
 	grace := time.Duration(ctl.StopTimeoutSec) * time.Second
@@ -195,7 +203,7 @@ func (p *processAdapter) stop(ctx context.Context, ctl config.BotController, ent
 	case <-time.After(grace):
 	case <-ctx.Done():
 	}
-	_ = kill(c.cmd)
+	_ = c.control.kill()
 	select {
 	case <-c.done:
 		return fmt.Sprintf("Не завершился за %d с — остановлен принудительно", ctl.StopTimeoutSec), nil

@@ -421,7 +421,7 @@ func TestProcessControl(t *testing.T) {
 	f.svc.process.Sync(f.ctx)
 	time.Sleep(50 * time.Millisecond)
 	f.svc.process.Sync(f.ctx)
-	if v, _ := f.mon.Latest(f.ctx, id, false); len(v) == 0 {
+	if v, _ := f.mon.Latest(f.ctx, id, false); len(v) == 0 && runtime.GOOS == "linux" {
 		t.Error("process CPU/RAM not sampled")
 	}
 
@@ -512,7 +512,10 @@ func TestProcessCrashOpensIncident(t *testing.T) {
 	}
 }
 
-func TestConcurrentActionsOnOneBot(t *testing.T) {
+func TestProcessStopGracePeriod(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows terminates children directly; POSIX TERM grace period does not apply")
+	}
 	// The stop takes ~1 s (trap ignores TERM) so the second request overlaps.
 	f := newFixture(t, processCfg(t, `trap "" TERM; while true; do sleep 0.05; done`, "start", "stop"))
 	c := f.bot(t, NewBot{Name: "Медленный", Type: "process", ControllerID: "testproc"})
@@ -542,6 +545,57 @@ func TestConcurrentActionsOnOneBot(t *testing.T) {
 	}
 	if !strings.Contains(recs[0].Message, "принудительно") {
 		t.Errorf("TERM-ignoring child must be killed after the grace period: %q", recs[0].Message)
+	}
+}
+
+// Synchronize at the adapter boundary rather than assuming a stop takes long
+// enough to overlap. No systemd process is launched, on either OS.
+func TestConcurrentActionsOnOneBot(t *testing.T) {
+	f := newFixture(t, func(c *config.Bots) {
+		c.Controllers = []config.BotController{{ID: "slow", Kind: "systemd_user", Unit: "test.service", Allow: []string{"restart"}}}
+	})
+	entered, release := make(chan struct{}), make(chan struct{})
+	defer close(release)
+	a := f.svc.controllers["systemd_user"].(*systemdAdapter)
+	a.run = func(ctx context.Context, args ...string) ([]byte, error) {
+		if args[0] == "restart" {
+			close(entered)
+			select {
+			case <-release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		}
+		return []byte("LoadState=loaded\nActiveState=active\nSubState=running\nMainPID=1\n"), nil
+	}
+	c := f.bot(t, NewBot{Name: "Изолированный адаптер", Type: "process", ControllerID: "slow"})
+	id := c.Bot.EntityID
+	c1, err := f.svc.Prepare(f.ctx, id, "restart", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c2, err := f.svc.Prepare(f.ctx, id, "restart", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.svc.Execute(f.ctx, id, "restart", "key-concurrent-first", ActionRequest{ConfirmationToken: c1.Token})
+		done <- err
+	}()
+	select {
+	case <-entered:
+	case <-time.After(5 * time.Second):
+		t.Fatal("adapter not entered")
+	}
+	_, err = f.svc.Execute(f.ctx, id, "restart", "key-concurrent-second", ActionRequest{ConfirmationToken: c2.Token})
+	var ae *ActionError
+	if !errors.As(err, &ae) || ae.Status != 409 {
+		t.Errorf("overlapping action: %v", err)
+	}
+	release <- struct{}{}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
