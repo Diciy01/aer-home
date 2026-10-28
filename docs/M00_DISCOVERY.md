@@ -68,7 +68,7 @@
 | 5 | Типы сущностей в openapi (computer…custom) ≠ категории задания (сайты, БД, процессы, Docker-контейнеры, пользовательские объекты) | решить в M02 (ADR + contract bump) |
 | 6 | `examples/home.scene.json`: `entityBinding`, id `room-office` vs SCENE_EDITOR `deviceBinding{entityId,role}` и openapi `Room.id: uuid`; нет `sortAnchor/hitArea/layers` | решить в M03 (scene schema v1) |
 | 7 | `events.schema.json`: `entityId` обязателен, а системные события (Core start, WAN down) без сущности | сделать nullable в M05 |
-| 8 | Задание: Android — целевая платформа; ROADMAP: M12 LATER | оставить порядок, Android после iOS-решения |
+| 8 | Задание: Android — целевая платформа; ROADMAP: M12 LATER | историческое решение заменено 2026-10-28: Android поддерживается независимо от отменённого iOS (M11 CANCELLED / OUT OF SCOPE) |
 | 9 | Задание §9 «переключение ОС» внутри Remote; docs — отдельный модуль Power | Remote лишь вызывает Power API |
 | 10 | MODULES: Foundation включает event bus и jobs; задание §19 их не требует | перенесены в первый модуль, которому нужны (M05 / M08) |
 
@@ -89,4 +89,4 @@
 
 ## 10. Последовательность разработки
 
-M01 Foundation (сделано) → **M02 Registry** → M03 Scene slice (+ Flame бенчмарк) → M04 Editor → M05 Monitoring (+ event bus) → M06 Bots → S-Remote / S-Power (spike, с физическим присутствием) → M07/M08 → M09 Network+TV → M10 Windows → M11 iOS → M12 Android → M13 Migration.
+M01 Foundation (сделано) → **M02 Registry** → M03 Scene slice (+ Flame бенчмарк) → M04 Editor → M05 Monitoring (+ event bus) → M06 Bots → S-Remote / S-Power (spike, с физическим присутствием) → M07/M08 → M09 Network+TV → M10 Windows → M14.4 AER Connect/Windows Host → M13 Migration (по аппаратным предпосылкам). M12 Android выполнен независимо; M11 отменён владельцем 2026-10-28 и исключён из обязательной последовательности.

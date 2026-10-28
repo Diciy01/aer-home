@@ -12,7 +12,7 @@
 | Network | обзор сети и ТВ: интернет (явные цели, TLS), WAN роутера (UPnP IGD, только чтение), Sunshine (serverinfo); устройства — из Registry + Monitoring; история/журнал/инциденты — Monitoring — **M09, ADR-015, `docs/NETWORK.md`** | менять настройки роутера/Wi-Fi/DHCP/DNS/firewall; сканировать сеть; управлять Sunshine; свой журнал/метрики/инциденты | 09 |
 | Integrations | Beszel, Docker, MeshCentral/etc adapters | ломать Core при отказе внешнего сервиса | по одному |
 | Desktop | Flutter Windows/Linux, scene, classic, app shell | core business logic | 01–03 |
-| iOS | SwiftUI/Swift + scene, classic, remote apps | общий desktop stream на телефоне | позднее |
+| iOS (исторический) | исходники и документы сохраняются | не является зависимостью поддерживаемых клиентов | M11 CANCELLED / OUT OF SCOPE, решение владельца 2026-10-28 |
 | Android | Kotlin/Compose: «Дом» (сцена v1, просмотр) и «Классика» — `apps/android`, ADR-016, `ANDROID.md` | общий desktop stream на телефоне; редактирование сцены | M12 DONE (эмулятор) |
 
 ## Интерфейсы (концептуальные, уточнить в коде)

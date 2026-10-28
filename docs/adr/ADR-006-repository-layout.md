@@ -15,7 +15,7 @@ contracts/       openapi.yaml, events.schema.json (source of truth)
 docs/            требования, ADR, отчёты
 examples/        примерные данные (демо)
 ```
-Позже: `agents/` (Go), `apps/ios/`, `apps/android/`.
+Исторический план размещения: `agents/` (Go), `apps/ios/`, `apps/android/`. Уточнение владельца 2026-10-28: `apps/ios/` — CANCELLED / OUT OF SCOPE; существующие файлы сохраняются, новый iOS-проект не создаётся. Android поддерживается; реализация находится в `apps/android/`, агенты — в `core/cmd/`.
 
 ## Последствия
 - `git config core.filemode false` (NTFS); identity задана локально в репо.

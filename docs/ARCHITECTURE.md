@@ -4,7 +4,7 @@
 Лёгкий **modular monolith**: один Go процесс `aer-core` + SQLite WAL, отдельные агенты для хостов и нативные клиенты; внешние сервисы (Beszel/remote) — **опциональные adapters**, а не обязательный фундамент.
 
 ```text
-Flutter Desktop (Windows/Linux)      SwiftUI iOS / Kotlin Android
+Flutter Desktop (Windows/Linux)      Kotlin Android
        |                                         |
        +----------- HTTPS/WSS via secure private transport --------+
                                                                    |
@@ -56,4 +56,4 @@ SQLite WAL на этапе MVP; миграции идемпотентные и �
 - HTTP API prefix `/api/v1`; OpenAPI source of truth; versioned capabilities.
 
 ## ADRs перед реализацией
-ADR-001: Go/SQLite; ADR-002: Flutter+Flame; ADR-003: remote provider после SPIKE; ADR-004 → ADR-014: питание и смена ОС (UEFI BootNext через агент, M08); ADR-005: iOS scene rendering choice after prototype.
+ADR-001: Go/SQLite; ADR-002: Flutter+Flame; ADR-003: remote provider после SPIKE; ADR-004 → ADR-014: питание и смена ОС (UEFI BootNext через агент, M08). ADR-005 (историческая идея рендера iOS) — CANCELLED / OUT OF SCOPE по решению владельца 2026-10-28; не является зависимостью архитектуры. Клиенты: Windows, Linux/Ubuntu Desktop, Android; Core/Gateway: Ubuntu Server. Возможный веб-интерфейс для iPhone не входит в обязательную архитектуру или план.

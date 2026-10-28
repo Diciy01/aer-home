@@ -26,9 +26,10 @@
 - Наличие отдельного WoL sender; двойной boot switch проверен при физическом присутствии; BitLocker recovery/fallback документирован.
 - Сбой загрузки возвращает честное UNKNOWN/FAILED, без бесконечной перезагрузки.
 
-## Desktop + mobile
+## Поддерживаемые платформы
+- Обязательные платформы: Android, Windows, Linux/Ubuntu Desktop, Ubuntu Server. M11 (нативный iOS) — CANCELLED / OUT OF SCOPE по решению владельца 2026-10-28; его реализация, инструменты Apple и iOS-сборки не входят в критерии завершения или зависимости задач. Исходники и документы не удаляются. Веб для iPhone — только необязательная будущая идея, без нового этапа.
 - Windows desktop: installer, launch, tray, notifications, secure API access, tests.
-- iOS/Android: mode choice first launch, persistent setting, переключение без потери состояния; для функций нет «ложных» кнопок.
+- Android: mode choice first launch, persistent setting, переключение без потери состояния; для функций нет «ложных» кнопок.
 - Макеты проходят accessibility/low motion/performance checks.
 
 ## Миграция на сервер

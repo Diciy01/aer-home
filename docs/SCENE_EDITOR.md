@@ -21,7 +21,7 @@ Home → Rooms → Layers → VisualObjects. Актуальная схема —
 - Устройство без доступа/провайдера остаётся в комнате с `UNKNOWN` или `UNSUPPORTED`, не исчезает.
 
 ## Flutter ↔ mobile
-Общий JSON scene schema + assets/IDs. На iOS/Android отдельные рендереры либо совместимый общий движок **только после spike** по производительности и стоимости поддержки. Не утверждать, что SwiftUI/Compose нативно рендерят Flame.
+Общий JSON scene schema + assets/IDs. Android использует отдельный рендерер Compose (ADR-016); он не исполняет Flame. Windows/Linux используют Flutter/Flame. Нативная ветка iOS отменена владельцем 2026-10-28 (M11 CANCELLED / OUT OF SCOPE); прежние материалы сохраняются, дополнительных рендереров Apple не планируется.
 
 ## Статус
 - M03 (просмотр) — готово: сцена, камера, выбор, привязки, хранение в Core, офлайн-кэш.
