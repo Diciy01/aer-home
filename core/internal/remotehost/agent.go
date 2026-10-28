@@ -62,7 +62,13 @@ func New(cfg Config, log *slog.Logger) (*Agent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("tls certificate: %w", err)
 	}
+	cfg.GatewayURL = strings.TrimRight(cfg.GatewayURL, "/")
 	a := &Agent{cfg: cfg, log: log, certPEM: cert, http: &http.Client{Timeout: 40 * time.Second}}
+	if cfg.CoreCertSHA256 != "" {
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		tr.TLSClientConfig = remoteengine.PinnedTLS(cfg.CoreCertSHA256)
+		a.http.Transport = tr
+	}
 	switch cfg.Backend {
 	case "windows-rdp":
 		a.backend = &windowsBackend{c: cfg}
@@ -214,6 +220,10 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Срок сеанса истёк до открытия", nil)
 		return
 	}
+	if c.Relay && a.cfg.GatewayURL == "" {
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Сеанс через Gateway, но gatewayUrl агента не настроен", nil)
+		return
+	}
 	if a.cfg.Approval == "prompt" {
 		a.event(ctx, c.SessionID, remoteengine.EventAwaitingApproval, "", nil)
 		if !a.Prompt(ctx, "Разрешить удалённое подключение AER HOME к этому компьютеру?") {
@@ -234,7 +244,11 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	}
 	if a.files != nil && c.Allowed.Files {
 		tok := newToken()
-		if err := a.files.Start(net.JoinHostPort("", strconv.Itoa(a.cfg.Files.Port)), a.cfg.TLSCert, a.cfg.TLSKey, tok); err != nil {
+		bind := "" // direct route: clients in the LAN connect to this port
+		if c.Relay {
+			bind = "127.0.0.1" // relay: only the agent's own legs reach it
+		}
+		if err := a.files.Start(net.JoinHostPort(bind, strconv.Itoa(a.cfg.Files.Port)), a.cfg.TLSCert, a.cfg.TLSKey, tok); err != nil {
 			a.log.Warn("file channel", "err", err)
 		} else if extra != nil {
 			extra["filesToken"] = tok
@@ -247,6 +261,12 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	a.mu.Unlock()
 	a.event(ctx, c.SessionID, remoteengine.EventReady, "", extra)
 	go a.watch(sctx, s)
+	if c.Relay {
+		go a.relay(sctx, c.SessionID, remoteengine.ChannelRDP, a.cfg.Port)
+		if a.files != nil && c.Allowed.Files {
+			go a.relay(sctx, c.SessionID, remoteengine.ChannelFiles, a.cfg.Files.Port)
+		}
+	}
 }
 
 // watch reports real connects/disconnects and ends the session at its

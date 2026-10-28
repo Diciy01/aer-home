@@ -11,6 +11,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"aerhome/core/internal/remoteengine"
 )
 
 // Config of the host agent (JSON file; the token lives in TokenFile).
@@ -42,6 +44,13 @@ type Config struct {
 	PromptCommand []string `json:"promptCommand"`
 	Clipboard     bool     `json:"clipboard"`
 	Files         Files    `json:"files"`
+	// CoreCertSHA256 pins Core's (or the Gateway's agent proxy) TLS
+	// certificate when coreUrl is https and the certificate is self-signed.
+	CoreCertSHA256 string `json:"coreCertSha256"`
+	// GatewayURL: the Remote Gateway for relay sessions (ADR-017), e.g.
+	// https://home.example:443. Empty: relay sessions are refused.
+	GatewayURL        string `json:"gatewayUrl"`
+	GatewayCertSHA256 string `json:"gatewayCertSha256"`
 }
 
 // Files is the session file channel (HTTPS on this host, not via Core).
@@ -92,6 +101,17 @@ func (c Config) Validate() error {
 	}
 	if c.Approval == "prompt" && len(c.PromptCommand) == 0 {
 		errs = append(errs, errors.New("promptCommand required for approval=prompt"))
+	}
+	if c.GatewayURL != "" {
+		if u, err := url.Parse(c.GatewayURL); err != nil || u.Scheme != "https" || u.Host == "" || (u.Path != "" && u.Path != "/") {
+			errs = append(errs, errors.New("gatewayUrl: https://host[:port] (TLS only)"))
+		}
+		if len(remoteengine.NormalizeFingerprint(c.GatewayCertSHA256)) != 64 {
+			errs = append(errs, errors.New("gatewayCertSha256: the pinned SHA-256 of the Gateway certificate"))
+		}
+	}
+	if c.CoreCertSHA256 != "" && len(remoteengine.NormalizeFingerprint(c.CoreCertSHA256)) != 64 {
+		errs = append(errs, errors.New("coreCertSha256: SHA-256 fingerprint"))
 	}
 	if c.Files.Enabled {
 		if !filepath.IsAbs(c.Files.Dir) {
