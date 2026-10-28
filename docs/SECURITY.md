@@ -23,3 +23,6 @@ Environment/OS keychain/secret store, токены не в YAML/SQLite plain/sce
 
 ## Recovery
 Backup + restore проверять; stateful schema migration с откатом, оговорить невозможность гарантированного rollback прошивки/UEFI. Операции reboot не повторяются автоматически. Соединение умерло — показать pending/unknown, не success.
+
+## Удалённый доступ (M07)
+Отдельная учётка агента на каждый хост, пароль RDP на один сеанс с однократной выдачей, RDP открыт только во время сеанса, закрепление сертификата хоста, отзыв, сроки, аудит без содержимого; только LAN/VPN. Подробно — `docs/REMOTE_SECURITY.md`.

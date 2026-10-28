@@ -315,7 +315,7 @@ func (s *Service) readiness(h Host) (bool, string) {
 	case !h.Effective.Desktop:
 		return false, "Рабочий стол не разрешён политикой или не поддерживается хостом"
 	case h.ActiveSession != nil:
-		return false, "Уже идёт сеанс (" + string(h.ActiveSession.State) + ")"
+		return false, "Уже идёт удалённый сеанс — к компьютеру подключён один клиент за раз"
 	}
 	return true, ""
 }

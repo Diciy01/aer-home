@@ -148,3 +148,18 @@ D=$(mktemp -d)
 AER_DATA_DIR=$D AER_LISTEN=127.0.0.1:18787 core/bin/aer-core &
 AER_CORE_URL=http://127.0.0.1:18787 AER_CORE_TOKEN_FILE=$D/core.token apps/desktop/build/linux/x64/release/bundle/aer_home_desktop
 ```
+
+## Удалённый доступ (M07): стенд и живая проверка
+```bash
+LAB=$(mktemp -d); tools/remote-lab/lab-host.sh $LAB 33891     # изолированный headless GNOME + grdctl (RDP выключен)
+# Core на 127.0.0.1:18797, компьютер в Registry, учётка агента kind=remote → $D/agent.token, политика с files=true
+# агент внутри стенда (его D-Bus и XDG-каталоги):
+bash -c ". $LAB/env.sh; export DBUS_SESSION_BUS_ADDRESS=\$(cat $LAB/bus); exec core/bin/aer-remote-host -config agent.json" &
+#   agent.json: grdctl ["grdctl","--headless"], daemon ["/usr/libexec/gnome-remote-desktop-daemon","--headless"], address 127.0.0.1, port 33891
+cd apps/desktop
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18797 AER_CORE_TOKEN_FILE=$D/data/core.token \
+  AER_DESKTOP_DATA_DIR=$D/desktop AER_SCREENSHOT_DIR=$D/shots AER_REMOTE_CLIENT_SHOTS=$D/shots \
+  AER_REMOTE_CLIENT="$PWD/../../tools/remote-lab/lab-client.sh $LAB :77" AER_REMOTE_FREERDP_DIR=$LAB/client/config/freerdp \
+  AER_REMOTE_LAB_TOOLS=$PWD/../../tools/remote-lab flutter test integration_test/remote_live_test.dart -d linux
+```
+Клиент Remmina запускается приложением в изолированном Xvfb `:77`; сеанс и буфер обмена пользователя не затрагиваются.

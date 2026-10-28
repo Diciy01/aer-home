@@ -1,0 +1,20 @@
+{
+  "coreUrl": "http://127.0.0.1:8787",
+  "tokenFile": "/home/USER/.config/aer-home/remote-host.token",
+  "stateDir": "/home/USER/.local/state/aer-remote-host",
+  "backend": "gnome-rdp",
+  "grdctl": ["grdctl"],
+  "daemon": ["/usr/libexec/gnome-remote-desktop-daemon"],
+  "address": "home-pc.tailnet-example.ts.net",
+  "port": 3389,
+  "rdpUser": "aer",
+  "approval": "prompt",
+  "promptCommand": ["zenity", "--question", "--title=AER HOME", "--timeout=100"],
+  "clipboard": true,
+  "files": {
+    "enabled": true,
+    "dir": "/home/USER/AER Remote",
+    "port": 3390,
+    "maxBytes": 2147483648
+  }
+}

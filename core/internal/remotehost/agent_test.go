@@ -360,3 +360,10 @@ func TestPasswordShape(t *testing.T) {
 		seen[p] = true
 	}
 }
+
+func TestDeployExampleLoads(t *testing.T) {
+	c, err := Load(filepath.Join("..", "..", "..", "deploy", "remote-host.example.json"))
+	if err != nil || c.Approval != "prompt" || !c.Files.Enabled || c.Daemon[0] != "/usr/libexec/gnome-remote-desktop-daemon" {
+		t.Fatalf("example: %+v %v", c, err)
+	}
+}
