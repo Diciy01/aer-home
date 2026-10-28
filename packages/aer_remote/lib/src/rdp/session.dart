@@ -201,7 +201,20 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
   int reconnects = 0;
 
   Stream<ViewerStatus> get statuses => _status.stream;
-  Stream<RdpFrame> get frames => _frames.stream;
+  // A server may send a single static frame before the Flutter page mounts.
+  // Each new view (including return from a minimized desktop page) needs the
+  // latest frame immediately, then all live updates, without requesting input
+  // merely to make a picture appear.
+  Stream<RdpFrame> get frames => Stream<RdpFrame>.multi((listener) {
+    final subscription = _frames.stream.listen(
+      listener.add,
+      onError: listener.addError,
+      onDone: listener.close,
+    );
+    final latest = lastFrame;
+    if (latest != null) listener.add(latest);
+    listener.onCancel = subscription.cancel;
+  });
 
   /// Text the remote side put on its clipboard (only with clipboard right).
   @override
@@ -209,7 +222,7 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
 
   @override
   Stream<({int width, int height, List<int> bgra, int seq})> get frameData =>
-      _frames.stream.map(
+      frames.map(
         (f) => (width: f.width, height: f.height, bgra: f.bgra, seq: f.seq),
       );
 
@@ -276,6 +289,7 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
         if (_closing) return;
         _busy = true;
         try {
+          final failed = s.state == RdpState.failed;
           lastError = s.error;
           s.dispose();
           _s = null;
@@ -285,7 +299,7 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
               await _mayReconnect();
           if (!retry) {
             _set(
-              s.state == RdpState.failed && !_wasConnected
+              failed && !_wasConnected
                   ? ViewerStatus.failed
                   : ViewerStatus.closed,
             );
@@ -335,6 +349,8 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
       s.disconnect();
       s.dispose();
     }
+    lastFrame = null;
+    _target = null;
     _set(ViewerStatus.closed);
     await _status.close();
     await _frames.close();

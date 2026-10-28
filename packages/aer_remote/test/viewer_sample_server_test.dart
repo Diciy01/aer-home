@@ -128,7 +128,7 @@ Directory? _sharedFreerdpDir() {
 }
 
 void main() {
-  late Process server;
+  Process? server;
   late int port;
   late String pin;
   late RdpNative native;
@@ -136,7 +136,11 @@ void main() {
 
   setUpAll(() async {
     if (_skip != false) return; // setUpAll runs even when every test skips
-    native = RdpNative.load()!;
+    final loaded = RdpNative.load();
+    if (loaded == null) {
+      fail('Cannot load AER_RDP_LIB and its bundled runtime DLLs');
+    }
+    native = loaded;
     pin = _pemSha256(File(_env['AER_RDP_SAMPLE_CERT']!).readAsStringSync());
     port = await _freePort();
     server = await Process.start(_server!, [
@@ -144,8 +148,8 @@ void main() {
       '--cert=${_env['AER_RDP_SAMPLE_CERT']}',
       '--key=${_env['AER_RDP_SAMPLE_KEY']}',
     ], workingDirectory: File(_env['AER_RDP_SAMPLE_CERT']!).parent.path);
-    server.stdout.transform(utf8.decoder).listen(serverLog.write);
-    server.stderr.transform(utf8.decoder).listen(serverLog.write);
+    server!.stdout.transform(utf8.decoder).listen(serverLog.write);
+    server!.stderr.transform(utf8.decoder).listen(serverLog.write);
     final end = DateTime.now().add(const Duration(seconds: 10));
     while (true) {
       try {
@@ -163,8 +167,9 @@ void main() {
 
   tearDownAll(() async {
     if (_skip != false) return;
-    server.kill();
-    await server.exitCode.timeout(
+    if (server == null) return;
+    server!.kill();
+    await server!.exitCode.timeout(
       const Duration(seconds: 5),
       onTimeout: () => -1,
     );
@@ -254,6 +259,41 @@ void main() {
   }, skip: _skip);
 
   // The same real RDP server behind the own Gateway: core/cmd/aer-remotelab
+  test(
+    'a late viewer receives the static frame and pin failure stays failed',
+    () async {
+      final viewer = EmbeddedRdpViewer(native, width: 1024, height: 768);
+      try {
+        await viewer.open(target());
+        await _until(
+          'frame before UI subscription',
+          () => viewer.lastFrame != null,
+        );
+        final frame = await viewer.frameData.first.timeout(
+          const Duration(seconds: 2),
+        );
+        expect(frame.width, 1024);
+        expect(frame.height, 768);
+      } finally {
+        await viewer.close();
+      }
+      final refused = EmbeddedRdpViewer(native);
+      try {
+        await refused.open(target(certSha256: 'ab' * 32));
+        await _until(
+          'pin failure reported',
+          () =>
+              refused.statusName == 'failed' || refused.statusName == 'closed',
+        );
+        expect(refused.statusName, 'failed');
+        expect(refused.lastError, contains('does not match the pinned'));
+      } finally {
+        await refused.close();
+      }
+    },
+    skip: _skip,
+  );
+
   // with -rdp (in-process Core, Gateway and host agent, all on loopback).
   final labBin = _env['AER_REMOTELAB_BIN'];
   test(

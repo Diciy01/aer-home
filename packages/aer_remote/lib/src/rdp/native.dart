@@ -128,11 +128,11 @@ class RdpNative {
     for (final path in [
       Platform.environment['AER_RDP_LIB'],
       Platform.isWindows ? '$exeDir\\$name' : '$exeDir/lib/$name',
-      name,
+      if (!Platform.isWindows) name,
     ]) {
       if (path == null || path.isEmpty) continue;
       try {
-        final n = RdpNative._(DynamicLibrary.open(path));
+        final n = RdpNative._(_open(path));
         if (n.version() != abi) continue;
         return _cached = n;
       } on ArgumentError {
@@ -140,6 +140,44 @@ class RdpNative {
       }
     }
     return null;
+  }
+
+  static DynamicLibrary _open(String path) {
+    if (!Platform.isWindows) return DynamicLibrary.open(path);
+    // LoadLibraryW (used by DynamicLibrary.open) does not search the loaded
+    // DLL's directory for its dependencies. This matters for Dart SDK tests
+    // and for explicit AER_RDP_LIB overrides. Restrict the search to this
+    // absolute DLL directory and Windows' default safe directories; do not
+    // modify PATH or the process-wide DLL search path.
+    final absolute = File(path).absolute.path;
+    final kernel = DynamicLibrary.open('kernel32.dll');
+    final load = kernel
+        .lookupFunction<
+          Pointer<Void> Function(Pointer<Utf16>, Pointer<Void>, Uint32),
+          Pointer<Void> Function(Pointer<Utf16>, Pointer<Void>, int)
+        >('LoadLibraryExW');
+    final free = kernel
+        .lookupFunction<
+          Int32 Function(Pointer<Void>),
+          int Function(Pointer<Void>)
+        >('FreeLibrary');
+    final wide = absolute.toNativeUtf16();
+    Pointer<Void> handle;
+    try {
+      handle = load(wide, nullptr, 0x00000100 | 0x00001000);
+    } finally {
+      calloc.free(wide);
+    }
+    if (handle == nullptr) {
+      throw ArgumentError(
+        'Cannot load aer_rdp and its bundled runtime dependencies',
+      );
+    }
+    try {
+      return DynamicLibrary.open(absolute);
+    } finally {
+      free(handle);
+    }
   }
 
   final int Function() version;

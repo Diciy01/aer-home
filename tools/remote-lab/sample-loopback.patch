@@ -1,0 +1,5 @@
+--- a/server/Sample/sfreerdp.c
++++ b/server/Sample/sfreerdp.c
+@@ -1539 +1539 @@
+-		started = instance->Open(instance, NULL, (UINT16)port);
++		started = instance->Open(instance, "127.0.0.1", (UINT16)port);
