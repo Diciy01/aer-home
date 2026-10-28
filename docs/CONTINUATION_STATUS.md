@@ -15,7 +15,7 @@
 - [x] Core: config `power`, модуль `power` (WoL, задания, политика, аудит), kind=power в Monitoring, ADR-014
 - [x] Агент `aer-power-host` (фиксированные адаптеры linux/windows, по умолчанию check mode), инвентаризация на реальном ПК проверена (только чтение)
 - [x] OpenAPI 0.9.0 + контрактный тест (Magic Packet на тестовый приёмник 127.0.0.1)
-- [ ] Flutter: раздел «Питание», панель в доме, тесты
+- [x] Flutter: раздел «Питание», панель в доме, 11 тестов (всего 187)
 - [ ] Живая проверка: Core + агент (dry-run) + тестовый UDP-приёмник WoL на 127.0.0.1
 - [ ] Документы: S_POWER_FEASIBILITY, POWER_DUALBOOT, ADR-014, M08 report, user guide, ROADMAP, MODULES
 

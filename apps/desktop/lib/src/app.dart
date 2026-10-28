@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'scene/scene_controller.dart';
 import 'state/bots_controller.dart';
+import 'state/power_controller.dart';
 import 'state/remote_controller.dart';
 import 'state/monitoring_controller.dart';
 import 'shell/app_shell.dart';
@@ -20,6 +21,7 @@ class AerHomeApp extends StatelessWidget {
     this.monitoring,
     this.bots,
     this.remote,
+    this.power,
   });
 
   final ConnectionController connection;
@@ -36,6 +38,9 @@ class AerHomeApp extends StatelessWidget {
   /// Remote access (M07); the section is hidden when absent.
   final RemoteController? remote;
 
+  /// Power (M08); the section is hidden when absent.
+  final PowerController? power;
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -50,6 +55,7 @@ class AerHomeApp extends StatelessWidget {
         monitoring: monitoring,
         bots: bots,
         remote: remote,
+        power: power,
       ),
     );
   }

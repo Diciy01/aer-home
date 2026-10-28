@@ -4,6 +4,7 @@ import '../features/bots/bot_details.dart';
 import '../features/bots/bot_scene_panel.dart';
 import '../features/bots/bots_view.dart';
 import '../features/classic/classic_view.dart';
+import '../features/power/power_view.dart';
 import '../features/remote/remote_view.dart';
 import '../features/house/house_view.dart';
 import '../features/monitoring/device_diagnostics.dart';
@@ -13,6 +14,7 @@ import '../features/registry/registry_view.dart';
 import '../scene/scene_controller.dart';
 import '../state/app_section.dart';
 import '../state/bots_controller.dart';
+import '../state/power_controller.dart';
 import '../state/remote_controller.dart';
 import '../state/connection_controller.dart';
 import '../state/monitoring_controller.dart';
@@ -30,6 +32,7 @@ class AppShell extends StatelessWidget {
     this.monitoring,
     this.bots,
     this.remote,
+    this.power,
   });
 
   final ConnectionController connection;
@@ -48,10 +51,38 @@ class AppShell extends StatelessWidget {
 
   RemoteController? get _remote => _bots == null ? null : remote;
 
+  /// Power (M08); shown after Remote (navigation indices follow the enum).
+  final PowerController? power;
+
+  PowerController? get _power => _remote == null ? null : power;
+
+  void _openRemote(String entityId) => section.value = AppSection.remote;
+
   Widget? _entityPanel(BuildContext context, String entityId) {
     final r = _remote;
     final bot = _botPanel(context, entityId);
     if (r == null) return bot;
+    final pw = _power;
+    final powerPanel = pw == null
+        ? null
+        : ListenableBuilder(
+            listenable: Listenable.merge([pw, r]),
+            builder: (context, _) {
+              final d = pw.deviceFor(entityId);
+              if (d == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: PowerScenePanel(
+                  power: pw,
+                  device: d,
+                  onOpen: () => section.value = AppSection.power,
+                  onOpenRemote: r.hostFor(entityId) == null
+                      ? null
+                      : () => _openRemote(entityId),
+                ),
+              );
+            },
+          );
     final remotePanel = ListenableBuilder(
       listenable: r,
       builder: (context, _) {
@@ -66,7 +97,7 @@ class AppShell extends StatelessWidget {
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [?bot, remotePanel],
+      children: [?bot, remotePanel, ?powerPanel],
     );
   }
 
@@ -152,6 +183,12 @@ class AppShell extends StatelessWidget {
                       textAlign: TextAlign.center,
                     ),
                   ),
+                if (_power != null)
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.power_settings_new_outlined),
+                    selectedIcon: Icon(Icons.power_settings_new_rounded),
+                    label: Text('Питание'),
+                  ),
               ],
             ),
             Expanded(
@@ -201,6 +238,10 @@ class AppShell extends StatelessWidget {
                         if (_remote case final r?)
                           section.visited.contains(AppSection.remote)
                               ? RemoteView(remote: r)
+                              : const SizedBox.shrink(),
+                        if (_power case final pw?)
+                          section.visited.contains(AppSection.power)
+                              ? PowerView(power: pw, onOpenRemote: _openRemote)
                               : const SizedBox.shrink(),
                       ],
                     ),

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'src/app.dart';
 import 'src/core_api/bots_api.dart';
 import 'src/core_api/core_client.dart';
+import 'src/core_api/power_api.dart';
 import 'src/core_api/remote_api.dart';
 import 'src/core_api/endpoint.dart';
 import 'src/core_api/registry_api.dart';
@@ -14,6 +15,7 @@ import 'src/scene/repository/scene_repository.dart';
 import 'src/scene/scene_controller.dart';
 import 'src/state/app_section.dart';
 import 'src/state/bots_controller.dart';
+import 'src/state/power_controller.dart';
 import 'src/state/remote_controller.dart';
 import 'src/core_api/monitoring_api.dart';
 import 'src/state/connection_controller.dart';
@@ -47,6 +49,9 @@ void main() {
     sourceName: 'AER HOME (${Platform.localHostname})',
   );
   unawaited(remote.start());
+  // The house shows power state and actions on bound computers.
+  final power = PowerController(HttpPowerApi(client), connection);
+  unawaited(power.start());
   final scene = SceneController(
     sceneApi: HttpSceneApi(client),
     registryApi: registryApi,
@@ -67,6 +72,7 @@ void main() {
       monitoring: monitoring,
       bots: bots,
       remote: remote,
+      power: power,
     ),
   );
 }
