@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // Parsers are platform-neutral so both the Linux and the Windows sources
@@ -189,21 +190,6 @@ func str(v any) string {
 	return s
 }
 
-// ParseSCQuery reads the STATE line of `sc query <name>` (Windows).
-func ParseSCQuery(s string) (running bool, state string, err error) {
-	for _, line := range strings.Split(s, "\n") {
-		k, v, ok := strings.Cut(line, ":")
-		if !ok || strings.TrimSpace(k) != "STATE" {
-			continue
-		}
-		f := strings.Fields(v)
-		if len(f) >= 2 {
-			return f[1] == "RUNNING", f[1], nil
-		}
-	}
-	return false, "", errors.New("no STATE in sc output")
-}
-
 type wevtEvent struct {
 	System struct {
 		Provider struct {
@@ -274,6 +260,19 @@ func ParseNvidiaSMI(s string) []NvidiaReading {
 		t, err2 := strconv.ParseFloat(strings.TrimSpace(f[1]), 64)
 		if err1 == nil && err2 == nil {
 			out = append(out, NvidiaReading{Util: u, Temp: t})
+		}
+	}
+	return out
+}
+
+// ParseMultiSZ splits a Windows REG_MULTI_SZ-style UTF-16 buffer (e.g. from
+// GetLogicalDriveStrings: "C:\␀D:\␀␀") into its strings. UTF16ToString
+// would stop at the first NUL and keep only the first entry.
+func ParseMultiSZ(buf []uint16) []string {
+	var out []string
+	for _, s := range strings.Split(string(utf16.Decode(buf)), "\x00") {
+		if s != "" {
+			out = append(out, s)
 		}
 	}
 	return out

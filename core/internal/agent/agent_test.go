@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf16"
 )
 
 func TestParseProcStatAndCPU(t *testing.T) {
@@ -63,15 +64,10 @@ not json`
 }
 
 func TestParseWindowsFormats(t *testing.T) {
-	sc := "SERVICE_NAME: Spooler\r\n        TYPE               : 110  WIN32_OWN_PROCESS\r\n        STATE              : 4  RUNNING\r\n"
-	if r, st, err := ParseSCQuery(sc); err != nil || !r || st != "RUNNING" {
-		t.Fatalf("%v %s %v", r, st, err)
-	}
-	if r, _, _ := ParseSCQuery("STATE : 1  STOPPED"); r {
-		t.Fatal("stopped")
-	}
-	if _, _, err := ParseSCQuery("[SC] OpenService FAILED 1060"); err == nil {
-		t.Fatal("missing service must be an error")
+	// GetLogicalDriveStrings: every fixed drive, not only the first (M10).
+	drives := utf16.Encode([]rune("C:\\\x00D:\\\x00E:\\\x00\x00"))
+	if d := ParseMultiSZ(drives); strings.Join(d, ",") != `C:\,D:\,E:\` {
+		t.Fatalf("drives: %q", d)
 	}
 	xmlIn := `<Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event"><System><Provider Name="disk"/><EventID>7</EventID><Level>2</Level>
 <TimeCreated SystemTime="2026-10-27T10:00:00.000000000Z"/><EventRecordID>1500</EventRecordID><Channel>System</Channel></System>

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -139,10 +140,7 @@ func (winDisk) Collect(now time.Time) ([]Sample, []LogLine) {
 		return []Sample{unavailable("disk.used_percent", "", "GetLogicalDriveStrings: "+err.Error(), now)}, nil
 	}
 	var out []Sample
-	for _, d := range strings.Split(windows.UTF16ToString(buf[:n]), "\x00") {
-		if d == "" {
-			continue
-		}
+	for _, d := range ParseMultiSZ(buf[:n]) {
 		p, _ := windows.UTF16PtrFromString(d)
 		if windows.GetDriveType(p) != windows.DRIVE_FIXED {
 			continue
@@ -241,21 +239,61 @@ func (winServices) Name() string { return "services" }
 func (s winServices) Collect(now time.Time) ([]Sample, []LogLine) {
 	var out []Sample
 	for _, name := range s.names {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		raw, _ := exec.CommandContext(ctx, "sc", "query", name).Output()
-		cancel()
-		running, state, err := ParseSCQuery(string(raw))
+		running, err := serviceRunning(name)
 		switch {
 		case err != nil:
-			out = append(out, unavailable("service.active", name, "sc query: служба не найдена или нет доступа", now))
+			out = append(out, unavailable("service.active", name, "служба не найдена или нет доступа: "+err.Error(), now))
 		case running:
 			out = append(out, measured("service.active", name, 1, now))
 		default:
-			_ = state
 			out = append(out, measured("service.active", name, 0, now))
 		}
 	}
 	return out, nil
+}
+
+// serviceRunning asks the Service Control Manager directly with the least
+// rights (connect + query status, no administrator needed). Parsing
+// `sc query` failed on localized Windows (СОСТОЯНИЕ in CP866 for STATE).
+func serviceRunning(name string) (bool, error) {
+	m, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return false, err
+	}
+	defer windows.CloseServiceHandle(m)
+	p, err := windows.UTF16PtrFromString(name)
+	if err != nil {
+		return false, err
+	}
+	h, err := windows.OpenService(m, p, windows.SERVICE_QUERY_STATUS)
+	if err != nil {
+		return false, err
+	}
+	defer windows.CloseServiceHandle(h)
+	var st windows.SERVICE_STATUS
+	if err := windows.QueryServiceStatus(h, &st); err != nil {
+		return false, err
+	}
+	return st.CurrentState == windows.SERVICE_RUNNING, nil
+}
+
+const cpACP = 0 // CP_ACP (WinNls.h): the system ANSI code page
+
+// fromANSI decodes console-tool output: wevtutil writes to a pipe in the
+// ANSI code page (e.g. 1251 on Russian Windows), not UTF-8.
+func fromANSI(b []byte) string {
+	if len(b) == 0 {
+		return ""
+	}
+	n, err := windows.MultiByteToWideChar(cpACP, 0, &b[0], int32(len(b)), nil, 0)
+	if err != nil || n == 0 {
+		return string(b)
+	}
+	w := make([]uint16, n)
+	if _, err := windows.MultiByteToWideChar(cpACP, 0, &b[0], int32(len(b)), &w[0], n); err != nil {
+		return string(b)
+	}
+	return string(utf16.Decode(w))
 }
 
 // EventLogSource reads Critical/Error/Warning events of the System and
@@ -289,7 +327,7 @@ func (s *EventLogSource) Collect(now time.Time) ([]Sample, []LogLine) {
 		if err != nil {
 			continue
 		}
-		lines, maxID, _ := ParseWevtutilXML(string(raw))
+		lines, maxID, _ := ParseWevtutilXML(fromANSI(raw))
 		if maxID > s.seen[ch] {
 			s.seen[ch] = maxID
 		}
