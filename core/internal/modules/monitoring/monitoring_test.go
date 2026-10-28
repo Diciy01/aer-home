@@ -153,7 +153,11 @@ func TestAgentCredentialsAndRevocation(t *testing.T) {
 	if strings.Contains(string(hash), token[len(token)-64:]) {
 		t.Fatal("secret stored in clear")
 	}
-	for _, bad := range []string{"", "aer1.x.y", token[:len(token)-1] + "0", strings.Replace(token, a.ID, srv.ID, 1)} {
+	last := "0" // a different last hex digit (the old "+0" was the same token 1/16 of the time)
+	if strings.HasSuffix(token, "0") {
+		last = "1"
+	}
+	for _, bad := range []string{"", "aer1.x.y", token[:len(token)-1] + last, strings.Replace(token, a.ID, srv.ID, 1)} {
 		if _, ok := f.svc.Authenticate(f.ctx, bad); ok {
 			t.Fatalf("token %q must be rejected", bad)
 		}
