@@ -601,7 +601,7 @@ func TestGatewayConfig(t *testing.T) {
 	c := Default()
 	c.ListenAddr, c.TokenFile, c.StateDir = "0.0.0.0:8443", "/x/t", "/x"
 	for url, ok := range map[string]bool{"http://127.0.0.1:8787": true, "http://localhost:8787": true, "https://core.lan:8787": true,
-		"http://192.168.1.2:8787": false, "ftp://x": false} {
+		"http://192.0.2.20:8787": false, "ftp://x": false} {
 		c.CoreURL = url
 		if err := c.Validate(); (err == nil) != ok {
 			t.Errorf("%s: %v", url, err)
