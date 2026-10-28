@@ -4,6 +4,7 @@ import '../features/bots/bot_details.dart';
 import '../features/bots/bot_scene_panel.dart';
 import '../features/bots/bots_view.dart';
 import '../features/classic/classic_view.dart';
+import '../features/network/network_view.dart';
 import '../features/power/power_view.dart';
 import '../features/remote/remote_view.dart';
 import '../features/house/house_view.dart';
@@ -14,6 +15,7 @@ import '../features/registry/registry_view.dart';
 import '../scene/scene_controller.dart';
 import '../state/app_section.dart';
 import '../state/bots_controller.dart';
+import '../state/network_controller.dart';
 import '../state/power_controller.dart';
 import '../state/remote_controller.dart';
 import '../state/connection_controller.dart';
@@ -33,6 +35,7 @@ class AppShell extends StatelessWidget {
     this.bots,
     this.remote,
     this.power,
+    this.network,
   });
 
   final ConnectionController connection;
@@ -57,6 +60,21 @@ class AppShell extends StatelessWidget {
   PowerController? get _power => _remote == null ? null : power;
 
   void _openRemote(String entityId) => section.value = AppSection.remote;
+
+  /// Network + TV (M09); shown after Power.
+  final NetworkController? network;
+
+  NetworkController? get _network => _power == null ? null : network;
+
+  NetworkLinks _netLinks(BuildContext context) => NetworkLinks(
+    showDevice: _showInRegistry,
+    diagnostics: monitoring == null
+        ? null
+        : (id) => showDiagnostics(context, monitoring!, id),
+    openJournal: monitoring == null
+        ? null
+        : () => section.value = AppSection.monitoring,
+  );
 
   Widget? _entityPanel(BuildContext context, String entityId) {
     final r = _remote;
@@ -95,9 +113,30 @@ class AppShell extends StatelessWidget {
         );
       },
     );
+    final nw = _network;
+    final networkPanel = nw == null
+        ? null
+        : ListenableBuilder(
+            listenable: nw,
+            builder: (context, _) {
+              if (nw.deviceFor(entityId) == null &&
+                  nw.sunshineFor(entityId).isEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: NetworkScenePanel(
+                  network: nw,
+                  entityId: entityId,
+                  onOpen: () => section.value = AppSection.network,
+                  links: _netLinks(context),
+                ),
+              );
+            },
+          );
     return Column(
       mainAxisSize: MainAxisSize.min,
-      children: [?bot, remotePanel, ?powerPanel],
+      children: [?bot, remotePanel, ?powerPanel, ?networkPanel],
     );
   }
 
@@ -189,6 +228,12 @@ class AppShell extends StatelessWidget {
                     selectedIcon: Icon(Icons.power_settings_new_rounded),
                     label: Text('Питание'),
                   ),
+                if (_network != null)
+                  const NavigationRailDestination(
+                    icon: Icon(Icons.lan_outlined),
+                    selectedIcon: Icon(Icons.lan_rounded),
+                    label: Text('Сеть и ТВ', textAlign: TextAlign.center),
+                  ),
               ],
             ),
             Expanded(
@@ -215,7 +260,12 @@ class AppShell extends StatelessWidget {
                           )
                         else
                           const SizedBox.shrink(),
-                        ClassicView(connection: connection),
+                        ClassicView(
+                          connection: connection,
+                          network: _network,
+                          onOpenNetwork: () =>
+                              section.value = AppSection.network,
+                        ),
                         RegistryView(
                           registry: registry,
                           connection: connection,
@@ -242,6 +292,14 @@ class AppShell extends StatelessWidget {
                         if (_power case final pw?)
                           section.visited.contains(AppSection.power)
                               ? PowerView(power: pw, onOpenRemote: _openRemote)
+                              : const SizedBox.shrink(),
+                        if (_network case final nw?)
+                          section.visited.contains(AppSection.network)
+                              ? NetworkView(
+                                  network: nw,
+                                  mon: monitoring,
+                                  links: _netLinks(context),
+                                )
                               : const SizedBox.shrink(),
                       ],
                     ),

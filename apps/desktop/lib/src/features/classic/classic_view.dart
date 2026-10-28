@@ -5,14 +5,25 @@ import 'package:flutter/material.dart';
 import '../../core_api/models.dart';
 import '../../shell/status_presentation.dart';
 import '../../state/connection_controller.dart';
+import '../../state/network_controller.dart';
+import '../network/network_view.dart';
 import '../../theme/tokens.dart';
 
 /// Classic (non-isometric) mode. In M01 it shows the system status panel;
 /// devices, incidents and logs are added by their own modules.
 class ClassicView extends StatelessWidget {
-  const ClassicView({super.key, required this.connection});
+  const ClassicView({
+    super.key,
+    required this.connection,
+    this.network,
+    this.onOpenNetwork,
+  });
 
   final ConnectionController connection;
+
+  /// Network + TV summary (M09), when the module is present.
+  final NetworkController? network;
+  final VoidCallback? onOpenNetwork;
 
   @override
   Widget build(BuildContext context) {
@@ -28,9 +39,13 @@ class ClassicView extends StatelessWidget {
           const SizedBox(height: AerSpacing.m),
           if (connection.info case final info?)
             _SystemInfoCard(info: info, stale: connection.isStale),
+          if (network case final n?) ...[
+            const SizedBox(height: AerSpacing.m),
+            NetworkSummaryCard(network: n, onOpen: onOpenNetwork ?? () {}),
+          ],
           const SizedBox(height: AerSpacing.l),
           Text(
-            'Устройства и сервисы — в разделе «Устройства». Инциденты, журналы и боты появятся в модулях M05–M06.',
+            'Устройства и сервисы — в разделе «Устройства»; инциденты и журналы — в «Мониторинге».',
             style: text.bodySmall?.copyWith(color: AerColors.inkMuted),
           ),
         ],

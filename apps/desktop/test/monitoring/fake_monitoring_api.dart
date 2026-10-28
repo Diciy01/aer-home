@@ -56,6 +56,9 @@ DeviceState device(
 );
 
 class FakeMonitoringApi implements MonitoringApi {
+  /// Network check lines (M09 tests add them; source net.*).
+  List<LogEntry> netLogs = [];
+
   Object? failWith;
   int overviewCalls = 0;
   final acked = <String>[];
@@ -219,6 +222,7 @@ class FakeMonitoringApi implements MonitoringApi {
     String? entityId,
     String? level,
     String? incidentId,
+    String? source,
     DateTime? from,
     int? before,
     int limit = 100,
@@ -237,12 +241,14 @@ class FakeMonitoringApi implements MonitoringApi {
                   entityId: devices[i % 3].entityId,
                   incidentId: i == 50 ? 'inc-1' : null,
                 ),
+              ...netLogs,
             ]
             .where(
               (l) =>
                   (q.isEmpty || l.message.contains(q)) &&
                   (level != 'error' || l.level == 'error') &&
-                  (entityId == null || l.entityId == entityId),
+                  (entityId == null || l.entityId == entityId) &&
+                  (source == null || l.source.startsWith(source)),
             )
             .toList();
     final start = before == null ? 0 : all.indexWhere((l) => l.id < before);

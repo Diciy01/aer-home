@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'src/app.dart';
 import 'src/core_api/bots_api.dart';
 import 'src/core_api/core_client.dart';
+import 'src/core_api/network_api.dart';
 import 'src/core_api/power_api.dart';
 import 'src/core_api/remote_api.dart';
 import 'src/core_api/endpoint.dart';
@@ -15,6 +16,7 @@ import 'src/scene/repository/scene_repository.dart';
 import 'src/scene/scene_controller.dart';
 import 'src/state/app_section.dart';
 import 'src/state/bots_controller.dart';
+import 'src/state/network_controller.dart';
 import 'src/state/power_controller.dart';
 import 'src/state/remote_controller.dart';
 import 'src/core_api/monitoring_api.dart';
@@ -52,6 +54,9 @@ void main() {
   // The house shows power state and actions on bound computers.
   final power = PowerController(HttpPowerApi(client), connection);
   unawaited(power.start());
+  // Network state shows in the house and on «Обзор», so it loads at startup.
+  final network = NetworkController(HttpNetworkApi(client), connection);
+  unawaited(network.start());
   final scene = SceneController(
     sceneApi: HttpSceneApi(client),
     registryApi: registryApi,
@@ -73,6 +78,7 @@ void main() {
       bots: bots,
       remote: remote,
       power: power,
+      network: network,
     ),
   );
 }
