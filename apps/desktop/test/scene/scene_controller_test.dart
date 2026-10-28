@@ -170,4 +170,18 @@ void main() {
       expect(c.canSave, isFalse);
     },
   );
+
+  test(
+    'cache writes are serialized: concurrent saves both land, last wins',
+    () async {
+      final cache = SceneCache(File('${dir.path}/serial/scene-cache.json'));
+      final doc = exampleScene();
+      await Future.wait([
+        for (var r = 1; r <= 5; r++) cache.write(doc, r, const {}),
+      ]);
+      await cache.settled;
+      expect((await cache.read())!.revision, 5);
+      expect(File('${cache.file.path}.tmp').existsSync(), isFalse);
+    },
+  );
 }

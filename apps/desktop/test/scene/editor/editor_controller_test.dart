@@ -21,6 +21,7 @@ import '../scene_fixtures.dart';
 
 void main() {
   late Directory dir;
+  late SceneCache cache;
   late FakeSceneApi sceneApi;
   late FakeRegistryApi registry;
   late MemoryDraftStore drafts;
@@ -29,6 +30,7 @@ void main() {
 
   setUp(() {
     dir = Directory.systemTemp.createTempSync('aer-editor-test-');
+    cache = SceneCache(File('${dir.path}/scene-cache.json'));
     sceneApi = FakeSceneApi();
     registry = FakeRegistryApi();
     drafts = MemoryDraftStore();
@@ -40,7 +42,12 @@ void main() {
       updatedAt: DateTime.utc(2026),
     );
   });
-  tearDown(() => dir.deleteSync(recursive: true));
+  tearDown(() async {
+    // A binding refresh may still be saving the cache; Windows cannot
+    // delete a file that is open.
+    await cache.settled;
+    dir.deleteSync(recursive: true);
+  });
 
   Future<(EditorController, SceneController, ConnectionController)>
   make() async {
@@ -61,6 +68,7 @@ void main() {
       registry: registry,
       api: sceneApi,
       dataDir: dir,
+      cache: cache,
       drafts: drafts,
     );
     addTearDown(scene.dispose);

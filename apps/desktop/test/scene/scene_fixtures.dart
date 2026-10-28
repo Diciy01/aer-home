@@ -118,14 +118,17 @@ SceneController sceneControllerFor({
   required RegistryApi registry,
   FakeSceneApi? api,
   Directory? dataDir,
+  SceneCache? cache,
   SceneDraftStore? drafts,
 }) => SceneController(
   sceneApi: api ?? FakeSceneApi(),
   registryApi: registry,
   connectionController: connection,
-  sceneCache: dataDir == null
-      ? MemorySceneCache()
-      : SceneCache(File('${dataDir.path}/scene-cache.json')),
+  sceneCache:
+      cache ??
+      (dataDir == null
+          ? MemorySceneCache()
+          : SceneCache(File('${dataDir.path}/scene-cache.json'))),
   bundledLoader: () async => exampleScene(),
   draftStore:
       drafts ??

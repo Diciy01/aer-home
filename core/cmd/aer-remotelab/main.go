@@ -149,8 +149,13 @@ func run() error {
 	fl, _ := net.Listen("tcp", "127.0.0.1:0")
 	filesPort := fl.Addr().(*net.TCPAddr).Port
 	fl.Close()
+	// The daemon is faked below; Ready only checks that the path exists.
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
 	acfg := remotehost.Config{CoreURL: coreURL, TokenFile: hostTok, StateDir: filepath.Join(dir, "agent"), Backend: "gnome-rdp",
-		Grdctl: []string{"grdctl"}, Daemon: []string{"/bin/true"}, Address: "192.0.2.10", Port: rdp.Addr().(*net.TCPAddr).Port,
+		Grdctl: []string{"grdctl"}, Daemon: []string{self}, Address: "192.0.2.10", Port: rdp.Addr().(*net.TCPAddr).Port,
 		RDPUser: "aer", Approval: "auto", Clipboard: true,
 		Files:      remotehost.Files{Enabled: true, Dir: filepath.Join(dir, "exchange"), Port: filesPort, MaxBytes: 1 << 20},
 		GatewayURL: gwURL, GatewayCertSHA256: fp}

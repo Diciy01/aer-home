@@ -172,7 +172,25 @@ class SceneCache {
     }
   }
 
+  Future<void> _pending = Future.value();
+
+  /// Completes when every write started so far has finished.
+  Future<void> get settled => _pending;
+
+  /// Writes are serialized: load and binding refresh may both save at once,
+  /// and on Windows a second writer cannot open or rename the shared temp
+  /// file while the first still holds it.
   Future<void> write(
+    SceneDocument doc,
+    int? revision,
+    Map<String, EntitySnapshot> snapshots,
+  ) {
+    final next = _pending.then((_) => _write(doc, revision, snapshots));
+    _pending = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> _write(
     SceneDocument doc,
     int? revision,
     Map<String, EntitySnapshot> snapshots,
