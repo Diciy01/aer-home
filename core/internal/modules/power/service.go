@@ -50,6 +50,8 @@ type Service struct {
 	confirms map[string]Confirmation
 	queues   map[string]*agentQueue // agentID → commands
 	lastSeen map[string]time.Time   // agentID → last hello/poll/event
+	macs     map[string]bool        // Core's own MACs (same-machine check)
+	macsAt   time.Time
 }
 
 type agentQueue struct {
@@ -341,9 +343,20 @@ func activeAgent(list []AgentView) *AgentView {
 	return nil
 }
 
+// coreMACs lists Core's own NICs, re-read at most every 30 s (listing
+// interfaces is a netlink round trip per call).
+func (s *Service) coreMACs() map[string]bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.macs == nil || time.Since(s.macsAt) > 30*time.Second {
+		s.macs, s.macsAt = localMACs(s.net), time.Now()
+	}
+	return s.macs
+}
+
 // sameMachine: the device's NIC is one of Core's own (Core runs on it).
 func (s *Service) sameMachine(wol *WoLTarget, agents []AgentView) bool {
-	local := localMACs(s.net)
+	local := s.coreMACs()
 	if wol != nil && local[strings.ToLower(wol.MAC)] {
 		return true
 	}

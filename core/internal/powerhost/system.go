@@ -91,6 +91,17 @@ func (h *Host) Inventory(ctx context.Context) HostInfo {
 	return info
 }
 
+// BootID changes on every boot; it is cheap and never cached.
+func (h *Host) BootID() string {
+	if h.GOOS == "windows" {
+		return windowsBootID()
+	}
+	if b, err := h.ReadFile("/proc/sys/kernel/random/boot_id"); err == nil {
+		return strings.TrimSpace(string(b))
+	}
+	return ""
+}
+
 func (h *Host) linux(ctx context.Context, info *HostInfo) {
 	info.OS = "linux"
 	if b, err := h.ReadFile("/etc/os-release"); err == nil {
@@ -100,9 +111,7 @@ func (h *Host) linux(ctx context.Context, info *HostInfo) {
 			}
 		}
 	}
-	if b, err := h.ReadFile("/proc/sys/kernel/random/boot_id"); err == nil {
-		info.BootID = strings.TrimSpace(string(b))
-	}
+	info.BootID = h.BootID()
 	if _, err := h.Stat("/sys/firmware/efi"); err == nil {
 		info.Firmware = "uefi"
 		// efivarfs is world-readable: 4 attribute bytes, then the value.
@@ -180,7 +189,7 @@ func (h *Host) windows(ctx context.Context, info *HostInfo) {
 	if out, err := h.run(ctx, "cmd", "/c", "ver"); err == nil {
 		info.OSVersion = strings.TrimSpace(out)
 	}
-	info.BootID = windowsBootID()
+	info.BootID = h.BootID()
 	if out, err := h.run(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", "Confirm-SecureBootUEFI"); err == nil {
 		switch strings.TrimSpace(out) {
 		case "True":

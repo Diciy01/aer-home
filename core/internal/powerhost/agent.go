@@ -38,8 +38,14 @@ type Agent struct {
 	// quiet: after a suspend the agent stays silent so Core can see it gone.
 	Quiet time.Duration
 
-	mu   sync.Mutex
-	seen map[string]bool // command ids already handled (replay protection)
+	// InventoryTTL: hello reuses facts this long (a command always takes
+	// a fresh inventory); keeps an idle agent from spawning tools.
+	InventoryTTL time.Duration
+
+	mu    sync.Mutex
+	inv   *HostInfo
+	invAt time.Time
+	seen  map[string]bool // command ids already handled (replay protection)
 	// stopped: a shutdown/reboot/switch is under way; take nothing more.
 	stopped bool
 }
@@ -50,7 +56,7 @@ func New(cfg Config, log *slog.Logger) *Agent {
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Agent{cfg: cfg, host: NewHost(cfg), http: &http.Client{Timeout: 40 * time.Second}, log: log, now: time.Now,
-		Quiet: 90 * time.Second, seen: map[string]bool{}}
+		Quiet: 90 * time.Second, InventoryTTL: 5 * time.Minute, seen: map[string]bool{}}
 }
 
 // Host exposes the fact/plan layer (tests replace its runner).
@@ -108,9 +114,25 @@ func (a *Agent) call(ctx context.Context, method, path string, body, out any) er
 	return nil
 }
 
-// Hello reports fresh facts.
+// Hello reports facts (re-collected when older than InventoryTTL).
 func (a *Agent) Hello(ctx context.Context) error {
-	return a.call(ctx, http.MethodPost, "/power/agent/hello", a.host.Inventory(ctx), nil)
+	return a.call(ctx, http.MethodPost, "/power/agent/hello", a.inventory(ctx, false), nil)
+}
+
+func (a *Agent) inventory(ctx context.Context, fresh bool) HostInfo {
+	a.mu.Lock()
+	cached, at := a.inv, a.invAt
+	a.mu.Unlock()
+	if !fresh && cached != nil && a.now().Sub(at) < a.InventoryTTL {
+		inv := *cached
+		inv.BootID = a.host.BootID()
+		return inv
+	}
+	inv := a.host.Inventory(ctx)
+	a.mu.Lock()
+	a.inv, a.invAt = &inv, a.now()
+	a.mu.Unlock()
+	return inv
 }
 
 func (a *Agent) event(ctx context.Context, job, kind, msg string) {
@@ -130,6 +152,7 @@ func (a *Agent) Handle(ctx context.Context, c Command) bool {
 		return false
 	}
 	if c.Action == "inventory" {
+		a.inventory(ctx, true)
 		if err := a.Hello(ctx); err != nil {
 			a.log.Warn("hello", "err", err)
 		}
@@ -147,7 +170,7 @@ func (a *Agent) Handle(ctx context.Context, c Command) bool {
 		return false
 	}
 	a.event(ctx, c.JobID, "accepted", "Агент принял команду")
-	inv := a.host.Inventory(ctx) // re-validate against what is true now
+	inv := a.inventory(ctx, true) // re-validate against what is true now
 	steps, err := a.host.Plan(c, inv)
 	if err != nil {
 		a.event(ctx, c.JobID, "failed", err.Error())

@@ -887,8 +887,9 @@ func TestCapabilitiesAgentsAndCheck(t *testing.T) {
 	if err != nil || j.State != JobSucceeded {
 		t.Fatalf("check: %+v %v", j, err)
 	}
+	_, _ = f.svc.Execute(f.ctx, e.ID, ActionCheck, "key-check-2", ActionRequest{})
 	if c := f.cmds(a); len(c) != 1 || c[0].Action != "inventory" || c[0].JobID != "" {
-		t.Fatalf("inventory: %+v", c)
+		t.Fatalf("inventory (coalesced): %+v", c)
 	}
 	if _, err := f.svc.Prepare(f.ctx, e.ID, ActionCheck, ""); err == nil {
 		t.Fatal("check confirmation")

@@ -117,6 +117,10 @@ func (s *Service) Hello(ctx context.Context, a monitoring.Agent, info HostInfo) 
 func (s *Service) enqueue(agentID string, c Command) {
 	s.mu.Lock()
 	q := s.queue(agentID)
+	if c.Action == "inventory" && slices.ContainsFunc(q.cmds, func(x Command) bool { return x.Action == "inventory" }) {
+		s.mu.Unlock() // one pending refresh is enough
+		return
+	}
 	q.cmds = append(q.cmds, c)
 	select {
 	case q.wake <- struct{}{}:

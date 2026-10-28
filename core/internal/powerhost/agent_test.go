@@ -376,6 +376,18 @@ func TestAgentEndToEnd(t *testing.T) {
 	if !f.ran("sudo", "-n", "/usr/bin/efibootmgr", "--bootnext", "0003") || !f.ran("systemctl", "reboot") {
 		t.Fatalf("argv: %v", f.calls)
 	}
+	// Idle hellos reuse the inventory: no tool is spawned for them.
+	f.mu.Lock()
+	n := len(f.calls)
+	f.mu.Unlock()
+	for range 3 {
+		_ = a.Hello(context.Background())
+	}
+	f.mu.Lock()
+	if len(f.calls) != n {
+		t.Fatalf("hello re-ran tools: %v", f.calls[n:])
+	}
+	f.mu.Unlock()
 	if j = e.job(j.ID); j.State != "waiting" {
 		t.Fatalf("waiting: %+v", j)
 	}

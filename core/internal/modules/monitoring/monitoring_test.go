@@ -347,6 +347,26 @@ func TestDualBootOneActiveAgentIsOnline(t *testing.T) {
 	}
 }
 
+// Control-plane credentials (remote, power) are not heartbeat sources: a
+// computer with only a power agent is judged by its other checks, and a
+// host agent keeps deciding when both exist.
+func TestControlPlaneAgentsAreNotHeartbeatSources(t *testing.T) {
+	f := newFixture(t)
+	pc := f.entity(t, "ПК (тест)", "computer")
+	f.agent(t, pc.ID, "power", "power")
+	f.agent(t, pc.ID, "remote", "remote")
+	f.svc.CheckAll(f.ctx)
+	if st := f.state(t, pc.ID); st.Status != StatusUnknown || strings.Contains(st.Reason, "Агент ещё ни разу") {
+		t.Fatalf("power/remote only: %s %q", st.Status, st.Reason)
+	}
+	host, _ := f.agent(t, pc.ID, "ubuntu", "host")
+	f.report(t, host, SampleIn{Metric: "cpu.usage", Value: val(1)})
+	f.svc.CheckAll(f.ctx)
+	if st := f.state(t, pc.ID); st.Status != StatusOnline {
+		t.Fatalf("with a host agent: %s %q", st.Status, st.Reason)
+	}
+}
+
 func TestTCPNeverReachableStaysUnknown(t *testing.T) {
 	f := newFixture(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")

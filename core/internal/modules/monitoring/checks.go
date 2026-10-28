@@ -122,7 +122,9 @@ func (s *Service) observe(ctx context.Context, e registry.Entity) observation {
 	agents, _ := s.ListAgents(ctx, e.ID)
 	live := agents[:0:0]
 	for _, a := range agents {
-		if a.RevokedAt == nil {
+		// Only reporting agents are heartbeat sources; remote and power
+		// credentials belong to control planes and never send reports.
+		if a.RevokedAt == nil && (a.Kind == "host" || a.Kind == "bot") {
 			live = append(live, a)
 		}
 	}
