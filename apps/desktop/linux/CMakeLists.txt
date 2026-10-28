@@ -106,6 +106,20 @@ foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
     COMPONENT Runtime)
 endforeach(bundled_library)
 
+# Built-in remote viewer (M14.3, ADR-017): native/aer_rdp over FreeRDP 3.
+# Optional: without the FreeRDP 3 development files the app is built as
+# before and uses the external RDP client.
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(AER_FREERDP QUIET freerdp3>=3.5 freerdp-client3>=3.5 winpr3>=3.5)
+endif()
+if(AER_FREERDP_FOUND)
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../native/aer_rdp" "${CMAKE_BINARY_DIR}/aer_rdp")
+  install(FILES "$<TARGET_FILE:aer_rdp>" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
+else()
+  message(STATUS "FreeRDP 3 development files not found: built-in remote viewer disabled")
+endif()
+
 # Copy the native assets provided by the build.dart from all packages.
 set(NATIVE_ASSETS_DIR "${PROJECT_BUILD_DIR}native_assets/linux/")
 install(DIRECTORY "${NATIVE_ASSETS_DIR}"

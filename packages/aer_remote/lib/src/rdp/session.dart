@@ -148,7 +148,7 @@ enum ViewerStatus { connecting, connected, reconnecting, closed, failed }
 /// reconnects after an unexpected drop while [canReconnect] says the AER
 /// session is still alive, and exposes frames, status and the remote
 /// clipboard. UI-agnostic: the Flutter widget only paints and forwards input.
-class EmbeddedRdpViewer implements RemoteViewer {
+class EmbeddedRdpViewer implements InteractiveRemoteViewer {
   EmbeddedRdpViewer(
     this._native, {
     this.canReconnect,
@@ -195,6 +195,7 @@ class EmbeddedRdpViewer implements RemoteViewer {
   final _clipboard = StreamController<String>.broadcast();
 
   ViewerStatus status = ViewerStatus.connecting;
+  @override
   String lastError = '';
   RdpFrame? lastFrame;
   int reconnects = 0;
@@ -203,7 +204,23 @@ class EmbeddedRdpViewer implements RemoteViewer {
   Stream<RdpFrame> get frames => _frames.stream;
 
   /// Text the remote side put on its clipboard (only with clipboard right).
+  @override
   Stream<String> get remoteClipboard => _clipboard.stream;
+
+  @override
+  Stream<({int width, int height, List<int> bgra, int seq})> get frameData =>
+      _frames.stream.map(
+        (f) => (width: f.width, height: f.height, bgra: f.bgra, seq: f.seq),
+      );
+
+  @override
+  Stream<String> get statusNames => _status.stream.map((s) => s.name);
+
+  @override
+  String get statusName => status.name;
+
+  @override
+  bool get clipboardAllowed => _target?.clipboard ?? false;
 
   @override
   String get id => 'embedded-freerdp';
@@ -297,11 +314,14 @@ class EmbeddedRdpViewer implements RemoteViewer {
     }
   }
 
+  @override
   void mouse(int flags, int x, int y) => _s?.mouse(flags, x, y);
+  @override
   void key(int scancode, bool down) => _s?.key(scancode, down);
   void unicode(int codepoint, bool down) => _s?.unicode(codepoint, down);
 
   /// Sends local clipboard text, only when the session allows it.
+  @override
   bool pushClipboard(String text) =>
       (_target?.clipboard ?? false) && (_s?.setClipboard(text) ?? false);
 

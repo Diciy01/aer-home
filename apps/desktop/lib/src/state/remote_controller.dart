@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:aer_remote/aer_remote.dart'
+    show EmbeddedRdpViewer, InteractiveRemoteViewer, RdpNative, ViewerTarget;
 import 'package:flutter/foundation.dart';
 
 import '../core_api/remote_api.dart';
@@ -29,6 +31,9 @@ class ActiveRemote {
   RemoteSession? session;
   RemoteGrant? _grant;
   RdpClientHandle? client;
+
+  /// The built-in viewer when it shows this session (M14.3).
+  InteractiveRemoteViewer? viewer;
   RemoteFilesClient? files;
   Duration? latency;
   String message = '';
@@ -36,24 +41,53 @@ class ActiveRemote {
   bool get live => phase != RemotePhase.ended && phase != RemotePhase.failed;
 }
 
+/// Builds a built-in viewer; [canReconnect] tells whether the AER session
+/// still lives after an unexpected drop.
+typedef EmbeddedFactory = InteractiveRemoteViewer? Function(
+  Future<bool> Function() canReconnect,
+);
+
 /// State of the «Удалённый доступ» section.
 class RemoteController extends ChangeNotifier {
   RemoteController(
     this.api,
     this._connection, {
     RdpLauncher? launcher,
+    EmbeddedFactory? embedded,
     this.sourceName = 'AER HOME Desktop',
     this.interval = const Duration(seconds: 10),
     this.autoPoll = true,
     this.step = const Duration(milliseconds: 500),
     this.probe = probeLatency,
-  }) : launcher = launcher ?? defaultLauncher() {
+  }) : launcher = launcher ?? defaultLauncher(),
+       embedded = embedded ?? _defaultEmbedded() {
     _connection.addListener(_onConnection);
   }
 
   final RemoteApi api;
   final ConnectionController _connection;
   final RdpLauncher launcher;
+
+  /// Builds the built-in viewer; null when the native library (FreeRDP 3
+  /// via aer_rdp) is not available — the external client is used then.
+  final EmbeddedFactory? embedded;
+
+  /// The user's choice: built-in viewer (default) or the external client.
+  bool preferEmbedded = true;
+
+  bool get embeddedAvailable => embedded != null;
+
+  /// Where the picture is shown for the next or current session.
+  String viewerNameFor(ActiveRemote? a) =>
+      (a?.viewer != null || (a == null && preferEmbedded && embeddedAvailable))
+      ? 'встроенный просмотр AER HOME'
+      : 'окно ${launcher.clientName}';
+
+  static EmbeddedFactory? _defaultEmbedded() => RdpNative.load() == null
+      ? null
+      : (canReconnect) =>
+            EmbeddedRdpViewer.tryCreate(canReconnect: canReconnect);
+
   final String sourceName;
   final Duration interval;
   final bool autoPoll;
@@ -161,7 +195,7 @@ class RemoteController extends ChangeNotifier {
     _active = a;
     _notify();
     try {
-      if (!launcher.available) {
+      if (!(preferEmbedded && embeddedAvailable) && !launcher.available) {
         throw StateError(
           '${launcher.clientName} не установлен — удалённый рабочий стол открывается во внешнем клиенте',
         );
@@ -221,6 +255,7 @@ class RemoteController extends ChangeNotifier {
   Future<void> _launch(ActiveRemote a) async {
     a.phase = RemotePhase.launching;
     _notify();
+    if (preferEmbedded && embedded != null && await _openEmbedded(a)) return;
     final c = await launcher.launch(a._grant!);
     a.client = c;
     a.phase = RemotePhase.running;
@@ -238,11 +273,56 @@ class RemoteController extends ChangeNotifier {
     );
   }
 
-  /// Opens the external client again for the same, still valid session.
+  Future<bool> _openEmbedded(ActiveRemote a) async {
+    final v = embedded!(() async {
+      try {
+        return !(await api.session(a.session!.id)).state.terminal;
+      } catch (_) {
+        return true; // Core away: the RDP session itself may go on (M07)
+      }
+    });
+    if (v == null) return false;
+    final g = a._grant!;
+    await v.open(
+      ViewerTarget(
+        host: g.host,
+        port: g.port,
+        username: g.username,
+        password: g.password,
+        certPem: g.certPem,
+        certSha256: g.certSha256,
+        clipboard: g.clipboard,
+      ),
+    );
+    a.viewer = v;
+    a.phase = RemotePhase.running;
+    a.message = 'Рабочий стол — во встроенном просмотре AER HOME';
+    _notify();
+    v.statusNames.listen((s) {
+      if (a.viewer != v || !a.live) return;
+      if (s == 'closed' || s == 'failed') {
+        a.phase = RemotePhase.clientClosed;
+        a.message = s == 'failed'
+            ? 'Не удалось показать рабочий стол: ${v.lastError}'
+            : 'Просмотр закрыт. Можно переподключиться, пока сеанс не истёк';
+      }
+      _notify();
+    });
+    return true;
+  }
+
+  void _closeViewer(ActiveRemote a) {
+    final v = a.viewer;
+    a.viewer = null;
+    if (v != null) unawaited(v.close());
+  }
+
+  /// Opens the picture again for the same, still valid session.
   Future<void> reconnect() async {
     final a = _active;
     if (a == null || !a.live || a._grant == null) return;
     a.client?.stop();
+    _closeViewer(a);
     await _launch(a);
   }
 
@@ -259,6 +339,7 @@ class RemoteController extends ChangeNotifier {
         a.phase = RemotePhase.ended;
         a.message = a.session!.reason;
         a.client?.stop();
+        _closeViewer(a);
         _drop(a);
         unawaited(refresh());
       }
@@ -282,6 +363,7 @@ class RemoteController extends ChangeNotifier {
     final a = _active;
     if (a == null) return;
     a.client?.stop();
+    _closeViewer(a);
     final s = a.session;
     if (s != null && !s.state.terminal) {
       try {
@@ -307,6 +389,7 @@ class RemoteController extends ChangeNotifier {
     await api.revoke(sessionId);
     if (_active?.session?.id == sessionId) {
       _active!.client?.stop();
+      _closeViewer(_active!);
       _active!.phase = RemotePhase.ended;
       _active!.message = 'Доступ отозван';
       _drop(_active!);
@@ -331,6 +414,7 @@ class RemoteController extends ChangeNotifier {
     _timer?.cancel();
     _sessionTimer?.cancel();
     _active?.files?.close();
+    if (_active != null) _closeViewer(_active!);
     _connection.removeListener(_onConnection);
     super.dispose();
   }

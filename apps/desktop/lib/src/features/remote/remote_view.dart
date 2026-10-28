@@ -6,14 +6,16 @@ import 'package:flutter/material.dart';
 
 import '../../core_api/remote_api.dart';
 import '../../remote/files_client.dart';
+import '../../remote/remote_desktop_view.dart';
 import '../../state/remote_controller.dart';
 import '../../theme/tokens.dart';
 import '../monitoring/mon_widgets.dart';
 import '../registry/error_text.dart';
 
 /// «Удалённый доступ»: computers, their real readiness, the running
-/// session and the history. The desktop itself opens in an external RDP
-/// client (ADR-013) — the UI says so.
+/// session and the history. The desktop opens in the built-in viewer
+/// (FreeRDP 3, M14.3) or, as a fallback, in an external RDP client — the
+/// UI says which.
 class RemoteView extends StatefulWidget {
   const RemoteView({super.key, required this.remote, this.focusEntityId});
   final RemoteController remote;
@@ -189,6 +191,7 @@ Future<void> connectWithOptions(
 ) async {
   var clipboard = h.effective.clipboard;
   var files = h.effective.files;
+  var embedded = r.preferEmbedded && r.embeddedAvailable;
   final go = await showDialog<bool>(
     context: context,
     builder: (context) => StatefulBuilder(
@@ -201,8 +204,21 @@ Future<void> connectWithOptions(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (r.embeddedAvailable)
+                SwitchListTile(
+                  key: const Key('remote-embedded-switch'),
+                  contentPadding: EdgeInsets.zero,
+                  value: embedded,
+                  onChanged: (v) => set(() => embedded = v),
+                  title: const Text('Встроенный просмотр'),
+                  subtitle: Text(
+                    embedded
+                        ? 'Рабочий стол — внутри AER HOME'
+                        : 'Окно ${r.launcher.clientName} (внешний клиент RDP)',
+                  ),
+                ),
               Text(
-                'Рабочий стол откроется в окне ${r.launcher.clientName} (внешний клиент RDP). '
+                '${embedded ? 'Рабочий стол откроется во встроенном просмотре AER HOME. ' : 'Рабочий стол откроется в окне ${r.launcher.clientName} (внешний клиент RDP). '}'
                 'Пароль сеанса одноразовый, сертификат компьютера проверяется.'
                 '${h.agent?.approval == 'prompt' ? ' На компьютере попросят подтвердить подключение.' : ''}',
               ),
@@ -249,7 +265,84 @@ Future<void> connectWithOptions(
       ),
     ),
   );
-  if (go == true) await r.connect(h, clipboard: clipboard, files: files);
+  if (go != true) return;
+  r.preferEmbedded = embedded;
+  await r.connect(h, clipboard: clipboard, files: files);
+  if (context.mounted && r.active?.viewer != null) {
+    await openRemoteDesktop(context, r);
+  }
+}
+
+/// Shows the running session's desktop (built-in viewer) full-window.
+/// Going back keeps the session; «Завершить» ends it.
+Future<void> openRemoteDesktop(BuildContext context, RemoteController r) =>
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => RemoteDesktopPage(remote: r)),
+    );
+
+class RemoteDesktopPage extends StatelessWidget {
+  const RemoteDesktopPage({super.key, required this.remote});
+  final RemoteController remote;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: remote,
+    builder: (context, _) {
+      final a = remote.active;
+      final v = a?.viewer;
+      return Scaffold(
+        key: const Key('remote-desktop-page'),
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          title: Text(a == null ? 'Удалённый рабочий стол' : a.host.name),
+          leading: IconButton(
+            tooltip: 'Свернуть (сеанс продолжается)',
+            icon: const Icon(Icons.arrow_back_rounded),
+            onPressed: () => Navigator.pop(context),
+          ),
+          actions: [
+            if (a != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Center(
+                  child: Text(
+                    '${a.session?.state.label ?? ''}'
+                    '${a.session?.allowed.clipboard ?? false ? ' · буфер обмена' : ' · буфер выключен'}',
+                  ),
+                ),
+              ),
+            if (a != null && a.live)
+              IconButton(
+                key: const Key('remote-desktop-reconnect'),
+                tooltip: 'Переподключиться',
+                onPressed: remote.reconnect,
+                icon: const Icon(Icons.refresh_rounded),
+              ),
+            if (a != null && a.live)
+              TextButton.icon(
+                key: const Key('remote-desktop-end'),
+                onPressed: () async {
+                  await remote.end();
+                  if (context.mounted) Navigator.pop(context);
+                },
+                icon: const Icon(Icons.call_end_rounded),
+                label: const Text('Завершить'),
+              ),
+          ],
+        ),
+        body: v == null
+            ? Center(
+                child: Text(
+                  a?.message.isNotEmpty ?? false
+                      ? a!.message
+                      : 'Сеанс не показывается',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              )
+            : RemoteDesktopView(key: ValueKey(v), viewer: v),
+      );
+    },
+  );
 }
 
 class RemoteHostCard extends StatelessWidget {
@@ -497,9 +590,10 @@ class ActiveSessionPanel extends StatelessWidget {
         s?.state == RemoteState.awaitingApproval
             ? 'Ждём подтверждения на компьютере…'
             : 'Компьютер готовит сеанс…',
-      RemotePhase.launching => 'Открываем ${remote.launcher.clientName}…',
+      RemotePhase.launching => 'Открываем ${remote.viewerNameFor(a)}…',
       RemotePhase.running => s?.state.label ?? 'Подключено',
-      RemotePhase.clientClosed => 'Окно клиента закрыто',
+      RemotePhase.clientClosed =>
+        a.viewer != null ? 'Просмотр закрыт' : 'Окно клиента закрыто',
       RemotePhase.ended => 'Сеанс завершён',
       RemotePhase.failed => 'Не удалось подключиться',
     };
@@ -543,7 +637,7 @@ class ActiveSessionPanel extends StatelessWidget {
             if (s != null && a.live)
               Text(
                 'Сеанс до ${clock(s.expiresAt)} · транспорт ${s.transport.toUpperCase()} напрямую с компьютером, Core видео не передаёт'
-                '${s.allowed.clipboard ? ' · буфер обмена (текст) — в окне клиента' : ' · буфер обмена выключен'}',
+                '${s.allowed.clipboard ? ' · буфер обмена (текст) — ${a.viewer != null ? 'во встроенном просмотре' : 'в окне клиента'}' : ' · буфер обмена выключен'}',
                 style: text.labelSmall?.copyWith(color: AerColors.inkMuted),
               ),
             const SizedBox(height: 8),
@@ -551,6 +645,13 @@ class ActiveSessionPanel extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                if (a.viewer != null && a.phase == RemotePhase.running)
+                  FilledButton.icon(
+                    key: const Key('remote-show-desktop'),
+                    onPressed: () => openRemoteDesktop(context, remote),
+                    icon: const Icon(Icons.desktop_windows_outlined, size: 18),
+                    label: const Text('Показать рабочий стол'),
+                  ),
                 if (a.phase == RemotePhase.clientClosed ||
                     a.phase == RemotePhase.running)
                   OutlinedButton.icon(

@@ -28,6 +28,8 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
+  aer_remote:
+    path: ../../packages/aer_remote
   crypto: ^3.0.7
   file_selector: ^1.1.0
   flame: ^1.38.2

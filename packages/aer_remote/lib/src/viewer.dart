@@ -48,3 +48,31 @@ abstract interface class RemoteViewer {
 
   Future<void> close();
 }
+
+/// A viewer that renders inside the app (the built-in one): the UI paints
+/// [frameData] and forwards input; status and clipboard rules
+/// stay in the engine.
+abstract interface class InteractiveRemoteViewer implements RemoteViewer {
+  /// BGRA frames (width, height, bytes, sequence).
+  Stream<({int width, int height, List<int> bgra, int seq})> get frameData;
+
+  Stream<String> get statusNames;
+
+  /// connecting | connected | reconnecting | closed | failed
+  String get statusName;
+
+  String get lastError;
+
+  /// The session's clipboard right (false: nothing is exchanged).
+  bool get clipboardAllowed;
+
+  /// Text the remote side copied (only with the clipboard right).
+  Stream<String> get remoteClipboard;
+
+  void mouse(int flags, int x, int y);
+
+  void key(int scancode, bool down);
+
+  /// Offers local text to the remote clipboard; false when not allowed.
+  bool pushClipboard(String text);
+}
