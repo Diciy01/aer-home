@@ -45,7 +45,8 @@ info:
     0.11.0 — Remote 2 (M14): RemoteGrant gains `route` (direct | relay) and `tunnel` (one-time
     relay tickets per channel, null on the direct route); remote access clients with pairing codes
     and revocation under /remote/clients; the Remote Gateway's service API under /remote/gw
-    (gatewayAuth: agent kind `gateway` + the client's credential); host agent relay check.
+    (gatewayAuth: agent kind `gateway` + the client's credential); host agent relay check;
+    the Gateway reports its certificate fingerprint (GET /remote/gateway for the owner).
     Additive: every 0.10.0 client keeps working on the direct route.
     See docs/adr/ADR-017-remote-engine-gateway.md.
 servers:
@@ -2156,6 +2157,46 @@ paths:
                       data: { type: object, required: [active], properties: { active: { type: array, items: { type: string } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/gateway:
+    get:
+      x-aer-status: implemented
+      summary: "What the Remote Gateway last reported: certificate SHA-256 (compare at pairing), version, online; null when it never reported"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { oneOf: [ { type: 'null' }, { $ref: '#/components/schemas/RemoteGatewayInfo' } ] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/gw/info:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: report its certificate fingerprint and version"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [certSha256], properties: { certSha256: { type: string }, version: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -3281,6 +3322,14 @@ components:
         client: { $ref: '#/components/schemas/RemoteClient' }
         code: { type: string, description: "XXXX-XXXX-XXXX, one use, shown once" }
         expiresAt: { type: string, format: date-time }
+    RemoteGatewayInfo:
+      type: object
+      required: [certSha256, version, seenAt, online]
+      properties:
+        certSha256: { type: string }
+        version: { type: string }
+        seenAt: { type: string, format: date-time }
+        online: { type: boolean }
     RemoteTunnelClaim:
       type: object
       required: [sessionId, entityId, channel]

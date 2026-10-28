@@ -52,6 +52,7 @@ type Service struct {
 	tickets  map[[32]byte]*ticket   // SHA-256(ticket) → one-time relay ticket
 	issued   map[string]int         // sessionID → tickets issued (limit)
 	fails    map[string]*failures   // clientID → recent credential failures
+	gw       *GatewayInfo           // last report of the Remote Gateway
 }
 
 type secret struct {

@@ -78,6 +78,17 @@ func TestRemoteGatewayContract(t *testing.T) {
 		`,"filesPort":3390,"capabilities":{"desktop":true,"input":true,"clipboard":true,"files":true,"apps":false},"approval":"auto","ready":true,"username":"aer"}`)
 	call("PUT", "/remote/hosts/"+pc.ID+"/policy", owner, `{"enabled":true,"desktop":true,"clipboard":true,"files":true,"maxMinutes":30}`)
 
+	if string(call("GET", "/remote/gateway", owner, "")) != "null" {
+		t.Fatal("gateway info before any report")
+	}
+	if code, _ := do("POST", "/remote/gw/info", gwAgent.Token, `{"certSha256":"nope"}`); code != 422 {
+		t.Fatalf("bad fingerprint accepted: %d", code)
+	}
+	call("POST", "/remote/gw/info", gwAgent.Token, `{"certSha256":"`+strings.Repeat("ab:", 31)+`ab","version":"0.1.0"}`)
+	checkShape(t, doc, "RemoteGatewayInfo", call("GET", "/remote/gateway", owner, ""))
+	if code, _ := do("POST", "/remote/gw/info", owner, `{"certSha256":"x"}`); code != http.StatusUnauthorized {
+		t.Fatalf("owner token on /remote/gw/info: %d", code)
+	}
 	pairing := call("POST", "/remote/clients", owner, `{"name":"Рабочий ноутбук (тест)","hosts":["`+pc.ID+`"],"clipboard":true,"files":true}`)
 	checkShape(t, doc, "RemotePairing", pairing)
 	var p struct {

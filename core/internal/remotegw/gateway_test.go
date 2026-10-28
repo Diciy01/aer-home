@@ -337,6 +337,14 @@ func TestGatewayEndToEnd(t *testing.T) {
 	home := s.addHost("Домашний ПК (тест)", false)
 	work := s.addHost("Рабочий ПК (тест)", true) // only reachable through the Gateway
 
+	// The Gateway reports its fingerprint; the owner sees the same one.
+	s.gw.ReportInfo(context.Background())
+	var gi struct{ CertSha256 string }
+	s.coreCall("GET", "/remote/gateway", "", &gi)
+	if gi.CertSha256 != s.gwFP {
+		t.Fatalf("owner sees %q, gateway has %q", gi.CertSha256, s.gwFP)
+	}
+
 	// Scenario A: AER Connect at work → home PC.
 	c1, c1ID := s.pair("AER Connect (тест)", true, home.id)
 	var hosts struct {

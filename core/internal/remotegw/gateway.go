@@ -130,6 +130,9 @@ func (g *Gateway) closeAll() {
 func (g *Gateway) Maintain(ctx context.Context) {
 	t := time.NewTicker(time.Duration(g.cfg.AliveCheckSec) * time.Second)
 	defer t.Stop()
+	report := time.NewTicker(time.Minute)
+	defer report.Stop()
+	g.ReportInfo(ctx)
 	for {
 		select {
 		case <-ctx.Done():
@@ -137,7 +140,21 @@ func (g *Gateway) Maintain(ctx context.Context) {
 		case <-t.C:
 			g.CheckAlive(ctx)
 			g.lim.gc()
+		case <-report.C:
+			g.ReportInfo(ctx)
 		}
+	}
+}
+
+// ReportInfo tells Core the Gateway's certificate fingerprint and version
+// (shown to the owner for comparison at pairing).
+func (g *Gateway) ReportInfo(ctx context.Context) {
+	fp, err := g.Fingerprint()
+	if err != nil {
+		return
+	}
+	if _, _, err := g.coreCall(ctx, http.MethodPost, "/remote/gw/info", map[string]string{"certSha256": fp, "version": Version}, nil, nil); err != nil {
+		g.log.Warn("report to core", "err", err)
 	}
 }
 

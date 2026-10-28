@@ -4,9 +4,11 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"aerhome/core/internal/foundation/httpapi"
 	"aerhome/core/internal/modules/monitoring"
+	"aerhome/core/internal/remoteengine"
 )
 
 // Routes of remote access clients (owner) and of the Remote Gateway's
@@ -29,6 +31,7 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPut, "/remote/clients/{id}", m.updateClient)
 	r.Handle(http.MethodPost, "/remote/clients/{id}/pairing", m.repairClient)
 	r.Handle(http.MethodPost, "/remote/clients/{id}/revoke", m.revokeClient)
+	r.Handle(http.MethodGet, "/remote/gateway", m.gatewayInfo)
 
 	gw := httpapi.Authorize("gateway", m.gatewayAuthorizer)
 	r.Handle(http.MethodPost, "/remote/gw/pair", m.gwPair, gw)
@@ -42,6 +45,45 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/gw/tunnel/host", m.gwHostLeg, gw)
 	r.Handle(http.MethodPost, "/remote/gw/tunnel/event", m.gwTunnelEvent, gw)
 	r.Handle(http.MethodPost, "/remote/gw/alive", m.gwAlive, gw)
+	r.Handle(http.MethodPost, "/remote/gw/info", m.gwInfo, gw)
+}
+
+// GatewayInfo is what the Gateway last reported about itself: the owner
+// shows the fingerprint so a new client can compare it at pairing.
+type GatewayInfo struct {
+	CertSHA256 string    `json:"certSha256"`
+	Version    string    `json:"version"`
+	SeenAt     time.Time `json:"seenAt"`
+	Online     bool      `json:"online"`
+}
+
+func (m *Module) gwInfo(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		CertSHA256 string `json:"certSha256"`
+		Version    string `json:"version"`
+	}
+	if err := decode(r, &in); err != nil {
+		return err
+	}
+	fp := remoteengine.NormalizeFingerprint(in.CertSHA256)
+	if len(fp) != 64 || strings.Trim(fp, "0123456789abcdef") != "" || len(in.Version) > 40 {
+		return apiError(&ValidationError{Fields: map[string]string{"certSha256": "SHA-256 сертификата Gateway"}})
+	}
+	m.svc.mu.Lock()
+	m.svc.gw = &GatewayInfo{CertSHA256: in.CertSHA256, Version: in.Version, SeenAt: m.svc.now().UTC()}
+	m.svc.mu.Unlock()
+	return ok(w, r, map[string]any{})
+}
+
+func (m *Module) gatewayInfo(w http.ResponseWriter, r *http.Request) error {
+	m.svc.mu.Lock()
+	defer m.svc.mu.Unlock()
+	if m.svc.gw == nil {
+		return ok(w, r, nil)
+	}
+	g := *m.svc.gw
+	g.Online = m.svc.now().Sub(g.SeenAt) < 3*time.Minute
+	return ok(w, r, g)
 }
 
 // gatewayAuthorizer accepts only agent credentials of kind "gateway".
