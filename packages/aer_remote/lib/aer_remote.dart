@@ -11,3 +11,6 @@ export 'src/gateway_client.dart';
 export 'src/tunnel.dart';
 export 'src/session.dart';
 export 'src/viewer.dart';
+export 'src/rdp/native.dart' show RdpNative, RdpFrame;
+export 'src/rdp/scancodes.dart';
+export 'src/rdp/session.dart';

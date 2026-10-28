@@ -7,6 +7,7 @@
 set -e
 D=$(readlink -f "$1"); PORT=${2:-33891}; mkdir -p "$D"/{config,data,cache,state}
 cat > "$D/env.sh" <<ENV
+export AER_LAB_VMON=${AER_LAB_VMON:-1920x1080}
 export XDG_CONFIG_HOME=$D/config XDG_DATA_HOME=$D/data XDG_CACHE_HOME=$D/cache XDG_STATE_HOME=$D/state
 export GSETTINGS_BACKEND=keyfile
 unset DISPLAY WAYLAND_DISPLAY
@@ -16,7 +17,10 @@ chmod 600 "$D/tls.key"
 cat > "$D/inner.sh" <<'INNER'
 #!/bin/bash
 D=$(dirname "$(readlink -f "$0")"); . "$D/env.sh"
-gnome-shell --wayland --headless --virtual-monitor 1920x1080 --wayland-display aer-remote-test > "$D/shell.log" 2>&1 &
+# AER_LAB_VMON=none: no extra monitor — the RDP session's own virtual
+# monitor is the only one, so new windows are always on the streamed screen.
+VMON=${AER_LAB_VMON:-1920x1080}
+gnome-shell --wayland --headless $([ "$VMON" = none ] || echo --virtual-monitor "$VMON") --wayland-display aer-remote-test > "$D/shell.log" 2>&1 &
 for i in $(seq 1 100); do gdbus introspect --session --dest org.gnome.Mutter.RemoteDesktop --object-path /org/gnome/Mutter/RemoteDesktop >/dev/null 2>&1 && break; sleep 0.1; done
 grdctl --headless rdp set-port "$PORT"; grdctl --headless rdp disable-port-negotiation
 grdctl --headless rdp set-tls-cert "$D/tls.crt"; grdctl --headless rdp set-tls-key "$D/tls.key"

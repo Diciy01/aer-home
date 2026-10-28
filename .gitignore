@@ -31,3 +31,4 @@ build/
 # Python
 __pycache__/
 *.pyc
+native/aer_rdp/build/

@@ -50,7 +50,8 @@ def up(d, core_port=18787, gw_port=18443, rdp_port=33891):
             pass
     pids = PIDS
     lab = os.path.join(d, "host")
-    out = subprocess.check_output(["bash", os.path.join(ROOT, "tools/remote-lab/lab-host.sh"), lab, str(rdp_port)]).decode()
+    henv = dict(os.environ, AER_LAB_VMON=os.environ.get("AER_LAB_VMON", "none"))
+    out = subprocess.check_output(["bash", os.path.join(ROOT, "tools/remote-lab/lab-host.sh"), lab, str(rdp_port)], env=henv).decode()
     pids["host"] = int(out.split()[-1])
     wait_file(os.path.join(lab, "bus"))
 
@@ -84,7 +85,7 @@ def up(d, core_port=18787, gw_port=18443, rdp_port=33891):
     gwdir = os.path.join(d, "gw")
     os.makedirs(gwdir, exist_ok=True)
     gcfg = {"listenAddr": f"127.0.0.1:{gw_port}", "coreUrl": f"http://127.0.0.1:{core_port}",
-            "tokenFile": secret("gateway.token", gw["token"]), "stateDir": gwdir, "aliveCheckSec": 2}
+            "tokenFile": secret("gateway.token", gw["token"]), "stateDir": gwdir, "aliveCheckSec": 2, "pairLimit": 100}  # lab: many test pairings
     json.dump(gcfg, open(os.path.join(gwdir, "gw.json"), "w"))
     fp = subprocess.check_output([os.path.join(BIN, "aer-remote-gateway"), "-config", os.path.join(gwdir, "gw.json"), "-fingerprint"]).decode().strip()
     g = subprocess.Popen([os.path.join(BIN, "aer-remote-gateway"), "-config", os.path.join(gwdir, "gw.json")],
@@ -128,6 +129,34 @@ def up(d, core_port=18787, gw_port=18443, rdp_port=33891):
     print(json.dumps({k: v for k, v in info.items() if k != "pairingCode"}, ensure_ascii=False))
 
 
+def repair(d):
+    """End leftover sessions and issue a fresh pairing code (between runs)."""
+    p = os.path.join(os.path.abspath(d), "lab.json")
+    info = json.load(open(p))
+    tok = open(info["ownerTokenFile"]).read().strip()
+
+    def call(method, path):
+        req = urllib.request.Request(info["coreUrl"] + "/api/v1" + path, method=method, headers={"Authorization": "Bearer " + tok})
+        with urllib.request.urlopen(req) as r:
+            return json.load(r)["data"]
+
+    for s in call("GET", "/remote/sessions?limit=20"):
+        if s["state"] not in ("disconnected", "failed", "expired", "revoked"):
+            call("POST", f"/remote/sessions/{s['id']}/end")
+    clients = [c for c in call("GET", "/remote/clients") if not c["revokedAt"]]
+    if clients:
+        info["clientId"] = clients[0]["id"]
+        info["pairingCode"] = call("POST", f"/remote/clients/{clients[0]['id']}/pairing")["code"]
+    else:
+        c = json.dumps({"name": "AER Connect (стенд)", "hosts": [info["hostId"]], "clipboard": True, "files": True}).encode()
+        req = urllib.request.Request(info["coreUrl"] + "/api/v1/remote/clients", data=c, method="POST",
+                                     headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+        r = json.load(urllib.request.urlopen(req))["data"]
+        info["clientId"], info["pairingCode"] = r["client"]["id"], r["code"]
+    json.dump(info, open(p, "w"), ensure_ascii=False, indent=1)
+    print("repaired")
+
+
 def down(d):
     info = json.load(open(os.path.join(os.path.abspath(d), "lab.json")))
     # agent first: it disables RDP and clears credentials on SIGTERM
@@ -158,5 +187,7 @@ if __name__ == "__main__":
             if not os.path.exists(p):
                 json.dump({"pids": PIDS}, open(p, "w"))
             raise
+    elif sys.argv[1] == "repair":
+        repair(sys.argv[2])
     elif sys.argv[1] == "down":
         down(sys.argv[2])

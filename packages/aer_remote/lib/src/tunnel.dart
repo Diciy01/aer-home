@@ -96,6 +96,8 @@ class LocalForwarder {
   Stream<Object> get errors => _errors.stream;
 
   Future<void> _accept(Socket local) async {
+    // A reset or broken pipe surfaces on `done`; it only ends this pair.
+    unawaited(local.done.catchError((Object _) => local));
     if (_closed) {
       local.destroy();
       return;
@@ -113,6 +115,7 @@ class LocalForwarder {
       remote.destroy();
       return;
     }
+    unawaited(remote.done.catchError((Object _) => remote));
     _open
       ..add(local)
       ..add(remote);
@@ -142,6 +145,15 @@ class LocalForwarder {
       onError: (_) => done(),
       cancelOnError: true,
     );
+  }
+
+  /// Drops the live connections but keeps listening (a network loss as the
+  /// viewer sees it; also used to force a clean reconnect).
+  void drop() {
+    for (final s in _open.toList()) {
+      s.destroy();
+    }
+    _open.clear();
   }
 
   /// Stops listening and drops every connection.
