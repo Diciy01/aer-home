@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:aer_remote/aer_remote.dart' show pinnedHttpClient;
 import 'package:crypto/crypto.dart';
 
 /// One file in the host's exchange folder.
@@ -40,10 +41,8 @@ class RemoteFilesClient {
     required this.baseUrl,
     required this.token,
     required this.certSha256,
-  }) : _http = HttpClient()
-         ..connectionTimeout = const Duration(seconds: 5)
-         ..badCertificateCallback = ((cert, host, port) =>
-             fingerprint(cert.der) == certSha256.toLowerCase());
+  }) : _http = pinnedHttpClient(certSha256)
+         ..connectionTimeout = const Duration(seconds: 5);
 
   final String baseUrl;
   final String token;
@@ -60,7 +59,15 @@ class RemoteFilesClient {
   void close() => _http.close(force: true);
 
   Future<HttpClientRequest> _open(String method, String path) async {
-    final req = await _http.openUrl(method, Uri.parse('$baseUrl$path'));
+    final uri = Uri.parse('$baseUrl$path');
+    if (uri.scheme != 'https' || uri.userInfo.isNotEmpty) {
+      throw const TransferError(
+        'File channel requires HTTPS without user info',
+      );
+    }
+    final req = await _http.openUrl(method, uri);
+    // A session token must never follow a redirect to a different endpoint.
+    req.followRedirects = false;
     req.headers.set('Authorization', 'Bearer $token');
     return req;
   }
