@@ -2,22 +2,18 @@ package remote
 
 import (
 	"context"
-	"crypto/sha256"
-	"crypto/x509"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"log/slog"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/modules/monitoring"
 	"aerhome/core/internal/modules/registry"
+	"aerhome/core/internal/remoteengine"
 )
 
 // Errors mapped to API responses.
@@ -97,21 +93,7 @@ func boolInt(b bool) int {
 }
 
 // CertFingerprint returns the SHA-256 of the first certificate in PEM.
-func CertFingerprint(pemText string) (string, error) {
-	b, _ := pem.Decode([]byte(pemText))
-	if b == nil || b.Type != "CERTIFICATE" {
-		return "", errors.New("not a PEM certificate")
-	}
-	if _, err := x509.ParseCertificate(b.Bytes); err != nil {
-		return "", err
-	}
-	sum := sha256.Sum256(b.Bytes)
-	parts := make([]string, len(sum))
-	for i, c := range sum {
-		parts[i] = hex.EncodeToString([]byte{c})
-	}
-	return strings.Join(parts, ":"), nil
-}
+func CertFingerprint(pemText string) (string, error) { return remoteengine.FingerprintPEM(pemText) }
 
 // ---- hosts ----
 
@@ -262,7 +244,7 @@ func (s *Service) Host(ctx context.Context, entityID string) (Host, error) {
 		t := row.lastHello
 		h.LastHelloAt = &t
 		h.AgentActive = s.now().Sub(row.lastHello) <= time.Duration(s.cfg.AgentTimeoutSec)*time.Second && s.agentLive(ctx, entityID, row.agentID)
-		h.Effective = info.Caps.and(Caps{Desktop: h.Policy.Desktop, Input: true, Clipboard: h.Policy.Clipboard, Files: h.Policy.Files})
+		h.Effective = info.Caps.And(Caps{Desktop: h.Policy.Desktop, Input: true, Clipboard: h.Policy.Clipboard, Files: h.Policy.Files})
 		if !h.Policy.Enabled {
 			h.Effective = Caps{}
 		}

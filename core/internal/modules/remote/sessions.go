@@ -12,6 +12,7 @@ import (
 
 	"aerhome/core/internal/foundation/ids"
 	"aerhome/core/internal/modules/monitoring"
+	"aerhome/core/internal/remoteengine"
 )
 
 const sessionCols = `id, entity_id, kind, source_name, source_entity, client_id, transport, state, reason, allowed,
@@ -322,7 +323,7 @@ func (s *Service) Grant(ctx context.Context, id string) (Grant, error) {
 		return Grant{}, &RefusedError{Status: 410, Code: "CONFLICT", Reason: "already_granted", Message: "Данные подключения уже выданы"}
 	}
 	s.audit(ctx, id, "granted", "Данные подключения выданы клиенту (один раз)")
-	g := Grant{SessionID: id, Transport: x.Transport, Host: row.info.Address, Port: row.info.Port, Username: row.info.Username,
+	g := Grant{SessionID: id, Transport: x.Transport, Route: remoteengine.RouteDirect, Host: row.info.Address, Port: row.info.Port, Username: row.info.Username,
 		Password: sec.password, CertPEM: row.info.CertPEM, CertSHA256: row.certFP, Clipboard: x.Allowed.Clipboard, ExpiresAt: x.ExpiresAt,
 		ExternalClient: "rdp"}
 	if x.Allowed.Files && sec.filesToken != "" && row.info.FilesPort > 0 {
@@ -426,14 +427,6 @@ func (s *Service) Commands(ctx context.Context, a monitoring.Agent, wait time.Du
 			return []Command{}
 		}
 	}
-}
-
-// AgentEvent is what the host agent reports about a session.
-type AgentEvent struct {
-	Event      string `json:"event"` // awaiting_approval | approved | denied | ready | connected | disconnected | closed | failed
-	Password   string `json:"password"`
-	FilesToken string `json:"filesToken"`
-	Message    string `json:"message"`
 }
 
 // OnAgentEvent applies a host agent's report to a session of its own host.

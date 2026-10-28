@@ -7,48 +7,34 @@
 // agent's own HTTPS file channel).
 package remote
 
-import "time"
+import (
+	"time"
 
-// State of a remote session.
-type State string
-
-const (
-	StatePending          State = "pending"
-	StateAwaitingApproval State = "awaiting_approval"
-	StateConnecting       State = "connecting"
-	StateConnected        State = "connected"
-	StateReconnecting     State = "reconnecting"
-	StateDisconnected     State = "disconnected"
-	StateFailed           State = "failed"
-	StateExpired          State = "expired"
-	StateRevoked          State = "revoked"
+	"aerhome/core/internal/remoteengine"
 )
 
-// Terminal states never change again.
-func (s State) Terminal() bool {
-	switch s {
-	case StateDisconnected, StateFailed, StateExpired, StateRevoked:
-		return true
-	}
-	return false
-}
+// Shared model of AER Remote (ADR-017): Core, the Gateway and the host
+// agent speak the same types.
+type (
+	State      = remoteengine.State
+	Caps       = remoteengine.Caps
+	Command    = remoteengine.Command
+	AgentEvent = remoteengine.AgentEvent
+	Grant      = remoteengine.Grant
+	FilesInfo  = remoteengine.FilesInfo
+)
 
-// Caps are what a host (or a policy, or a session) allows.
-type Caps struct {
-	Desktop   bool `json:"desktop"`
-	Input     bool `json:"input"`
-	Clipboard bool `json:"clipboard"`
-	Files     bool `json:"files"`
-	// Apps: single-application sessions (mobile Remote Apps). Declared by
-	// the host only when a backend can isolate an application; no current
-	// backend can (ADR-013).
-	Apps bool `json:"apps"`
-}
-
-func (c Caps) and(o Caps) Caps {
-	return Caps{Desktop: c.Desktop && o.Desktop, Input: c.Input && o.Input, Clipboard: c.Clipboard && o.Clipboard,
-		Files: c.Files && o.Files, Apps: c.Apps && o.Apps}
-}
+const (
+	StatePending          = remoteengine.StatePending
+	StateAwaitingApproval = remoteengine.StateAwaitingApproval
+	StateConnecting       = remoteengine.StateConnecting
+	StateConnected        = remoteengine.StateConnected
+	StateReconnecting     = remoteengine.StateReconnecting
+	StateDisconnected     = remoteengine.StateDisconnected
+	StateFailed           = remoteengine.StateFailed
+	StateExpired          = remoteengine.StateExpired
+	StateRevoked          = remoteengine.StateRevoked
+)
 
 // HostInfo is what the host agent reports in hello (no secrets).
 type HostInfo struct {
@@ -143,29 +129,6 @@ type Event struct {
 	Message string    `json:"message"`
 }
 
-// Grant is the one-time connection data for the client.
-type Grant struct {
-	SessionID      string     `json:"sessionId"`
-	Transport      string     `json:"transport"`
-	Host           string     `json:"host"`
-	Port           int        `json:"port"`
-	Username       string     `json:"username"`
-	Password       string     `json:"password"`
-	CertPEM        string     `json:"certPem"`
-	CertSHA256     string     `json:"certSha256"`
-	Clipboard      bool       `json:"clipboard"`
-	Files          *FilesInfo `json:"files"`
-	ExpiresAt      time.Time  `json:"expiresAt"`
-	ExternalClient string     `json:"externalClient"` // what the client must launch
-}
-
-// FilesInfo addresses the host agent's file channel for this session.
-type FilesInfo struct {
-	URL      string `json:"url"`
-	Token    string `json:"token"`
-	MaxBytes int64  `json:"maxBytes"`
-}
-
 // AppsInfo answers the mobile Remote Apps question honestly.
 type AppsInfo struct {
 	Status string   `json:"status"` // unsupported | available
@@ -177,14 +140,4 @@ type AppsInfo struct {
 type AppRef struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
-}
-
-// Command is what Core asks the host agent to do.
-type Command struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"` // open | close
-	SessionID string    `json:"sessionId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	Allowed   Caps      `json:"allowed"`
-	Reason    string    `json:"reason,omitempty"`
 }

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.10.0
+  version: 0.11.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -42,6 +42,12 @@ info:
     `net.*` log lines) and a rate-limited manual check. Monitoring gains the metric `net.latency`
     (TCP/HTTP probe time) and accepts events/logs/incidents without an entity. Additive.
     See docs/adr/ADR-015-network-tv.md.
+    0.11.0 — Remote 2 (M14): RemoteGrant gains `route` (direct | relay) and `tunnel` (one-time
+    relay tickets per channel, null on the direct route); remote access clients with pairing codes
+    and revocation under /remote/clients; the Remote Gateway's service API under /remote/gw
+    (gatewayAuth: agent kind `gateway` + the client's credential); host agent relay check.
+    Additive: every 0.10.0 client keeps working on the direct route.
+    See docs/adr/ADR-017-remote-engine-gateway.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -2833,10 +2839,11 @@ components:
         files: { type: boolean }
     RemoteGrant:
       type: object
-      required: [sessionId, transport, host, port, username, password, certPem, certSha256, clipboard, files, expiresAt, externalClient]
+      required: [sessionId, transport, route, host, port, username, password, certPem, certSha256, clipboard, files, tunnel, expiresAt, externalClient]
       properties:
         sessionId: { type: string, format: uuid }
         transport: { type: string }
+        route: { type: string, enum: [direct, relay], description: "direct: host address in the LAN (M07); relay: through the Remote Gateway with one-time tunnel tickets (ADR-017)" }
         host: { type: string }
         port: { type: integer }
         username: { type: string }
@@ -2853,6 +2860,15 @@ components:
                 url: { type: string }
                 token: { type: string }
                 maxBytes: { type: integer }
+        tunnel:
+          oneOf:
+            - type: 'null'
+            - type: object
+              required: [path, tickets, ttlSec]
+              properties:
+                path: { type: string }
+                tickets: { type: object, additionalProperties: { type: string }, description: "channel (rdp, files) → one-time ticket" }
+                ttlSec: { type: integer }
         expiresAt: { type: string, format: date-time }
         externalClient: { type: string }
     RemoteApps:

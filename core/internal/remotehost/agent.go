@@ -18,23 +18,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"aerhome/core/internal/remoteengine"
 )
 
 // Version of the host agent protocol implementation.
 const Version = "0.1.0"
 
-// Command mirrors remote.Command (agent side).
-type Command struct {
-	ID        string    `json:"id"`
-	Type      string    `json:"type"`
-	SessionID string    `json:"sessionId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	Allowed   struct {
-		Clipboard bool `json:"clipboard"`
-		Files     bool `json:"files"`
-	} `json:"allowed"`
-	Reason string `json:"reason"`
-}
+// Command is the shared Core → agent command (ADR-017).
+type Command = remoteengine.Command
 
 // Agent is the running host agent. One session at a time (RDP sharing of
 // the user's session is single-user).
@@ -215,25 +207,25 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	busy := a.session != nil
 	a.mu.Unlock()
 	if busy {
-		a.event(ctx, c.SessionID, "failed", "На хосте уже идёт другой сеанс", nil)
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "На хосте уже идёт другой сеанс", nil)
 		return
 	}
 	if time.Until(c.ExpiresAt) <= 0 {
-		a.event(ctx, c.SessionID, "failed", "Срок сеанса истёк до открытия", nil)
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Срок сеанса истёк до открытия", nil)
 		return
 	}
 	if a.cfg.Approval == "prompt" {
-		a.event(ctx, c.SessionID, "awaiting_approval", "", nil)
+		a.event(ctx, c.SessionID, remoteengine.EventAwaitingApproval, "", nil)
 		if !a.Prompt(ctx, "Разрешить удалённое подключение AER HOME к этому компьютеру?") {
-			a.event(ctx, c.SessionID, "denied", "Пользователь компьютера отклонил подключение", nil)
+			a.event(ctx, c.SessionID, remoteengine.EventDenied, "Пользователь компьютера отклонил подключение", nil)
 			return
 		}
 	}
-	a.event(ctx, c.SessionID, "approved", "", nil)
+	a.event(ctx, c.SessionID, remoteengine.EventApproved, "", nil)
 	pass := newPassword()
 	if err := a.backend.Open(ctx, a.backend.Username(), pass); err != nil {
 		_ = a.backend.Close(ctx)
-		a.event(ctx, c.SessionID, "failed", "Не удалось включить RDP: "+err.Error(), nil)
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось включить RDP: "+err.Error(), nil)
 		return
 	}
 	extra := map[string]string{"password": pass}
@@ -253,7 +245,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	a.mu.Lock()
 	a.session = s
 	a.mu.Unlock()
-	a.event(ctx, c.SessionID, "ready", "", extra)
+	a.event(ctx, c.SessionID, remoteengine.EventReady, "", extra)
 	go a.watch(sctx, s)
 }
 
@@ -278,10 +270,10 @@ func (a *Agent) watch(ctx context.Context, s *openSession) {
 			switch {
 			case n > 0 && !s.connected:
 				s.connected = true
-				a.event(ctx, s.id, "connected", fmt.Sprintf("Установлено соединений RDP: %d", n), nil)
+				a.event(ctx, s.id, remoteengine.EventConnected, fmt.Sprintf("Установлено соединений RDP: %d", n), nil)
 			case n == 0 && s.connected:
 				s.connected = false
-				a.event(ctx, s.id, "disconnected", "Соединение RDP закрыто или прервано", nil)
+				a.event(ctx, s.id, remoteengine.EventDisconnected, "Соединение RDP закрыто или прервано", nil)
 			}
 		}
 	}
@@ -305,7 +297,7 @@ func (a *Agent) closeSession(ctx context.Context, id, reason string) {
 		a.log.Error("could not disable RDP", "err", err)
 		reason += "; ошибка выключения RDP: " + err.Error()
 	}
-	a.event(ctx, id, "closed", reason, nil)
+	a.event(ctx, id, remoteengine.EventClosed, reason, nil)
 }
 
 // Run is the agent loop until ctx ends or the credential is revoked.
