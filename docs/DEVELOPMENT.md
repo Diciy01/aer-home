@@ -174,3 +174,17 @@ AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18797 AER_CORE_TOKEN_FIL
   flutter test integration_test/power_live_test.dart -d linux
 ```
 Стенд отказывается запускать агента с `"execute": true`; Magic Packet уходит только на 127.0.0.1. Остановка — `kill` PID из `$L/lab.json` (не `pkill`).
+
+## Сеть и ТВ (M09): стенд, живая проверка, реальные устройства
+```bash
+L=$(mktemp -d); python3 -I tools/network-lab/lab.py up $L 18798 &      # заглушки Sunshine/UPnP/TCP + изолированный Core
+python3 -I tools/network-lab/lab.py set $L sunshine=busy               # free|busy|down|401, wan=up|down
+python3 -I tools/network-lab/lab.py bench $L
+cd apps/desktop
+AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18798 AER_CORE_TOKEN_FILE=$L/data/core.token \
+  AER_DESKTOP_DATA_DIR=$L/desktop AER_SCREENSHOT_DIR=$L/shots AER_NET_LAB=$L AER_NET_LAB_TOOLS=$PWD/../../tools/network-lab \
+  flutter test integration_test/network_live_test.dart -d linux
+# реальные устройства, только чтение, отдельный Core на :18799, адреса в выводе маскируются:
+python3 -I tools/network-lab/real_check.py $(mktemp -d) --router <IP роутера> --tv <IP ТВ> --internet 1.1.1.1:443 --internet 9.9.9.9:443
+```
+Остановка стенда — `kill` PID Core из `$L/lab.json`.

@@ -14,7 +14,8 @@
 | n8n | https://docs.n8n.io/api/ | автоматизации: workflows, выполнения, повтор | INTEGRATED (M06, адаптер `n8n`): публичный REST API, ключ из файла, read-only + повтор по подтверждению; реальный n8n не подключался — проверено на заглушке API |
 | Uptime Kuma | https://github.com/louislam/uptime-kuma | availability checks/heartbeat | OPTIONAL, do not depend on undocumented API |
 | Healthchecks | https://github.com/healthchecks/healthchecks | scheduled job heartbeat | REFERENCE; too heavy for few bots |
-| Sunshine/Moonlight | https://github.com/LizardByte/Sunshine ; https://github.com/moonlight-stream/moonlight-android | уже выбранный TV-streaming | INTEGRATE STATUS only first; not clipboard/files solution |
+| Sunshine/Moonlight | https://github.com/LizardByte/Sunshine ; https://github.com/moonlight-stream/moonlight-android | уже выбранный TV-streaming | INTEGRATED (M09, модуль `network`): только состояние через GameStream `/serverinfo` (state/version/current app), веб-интерфейс открывается в браузере; проверено на реальном Sunshine 7.1 (только чтение); `/api` (пароль) не используется |
+| UPnP IGD | https://openconnectivity.org/developer/specifications/upnp-resources/upnp/ | состояние WAN роутера | INTEGRATED (M09): только `GetStatusInfo`/`GetCommonLinkProperties`, только при явно заданном URL описания; на реальном роутере UNVERIFIED |
 | Tailscale | https://tailscale.com/ | private remote access | EVALUATE setup; no public inbound |
 
 ## Важные оговорки

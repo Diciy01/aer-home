@@ -1,5 +1,7 @@
 # Мониторинг (M05)
 
+> M09: метрика `net.latency` — время ответа TCP/HTTP-проверки Core (не ICMP); хуки принимают события, логи и инциденты без объекта (интернет). Сеть и ТВ — `docs/NETWORK.md`.
+>
 > M06: боты используют это же хранилище через хуки сервиса (`AppendLog`, `RecordEvent`, `StoreSamples`, `RaiseIncident`/`ResolveIncident`, `SetIntegrationStatus`, `EventsOfKinds`) — `docs/BOTS.md`, ADR-012.
 
 Что работает, что сломалось, что недоступно и где искать причину. Решения — ADR-011; агенты — `docs/AGENTS.md`; замеры — `docs/M05_MONITORING_REPORT.md`.
