@@ -455,11 +455,13 @@ void _tv(IsoPen p, ArtContext c) {
     p.canvas.drawPath(
       path,
       Paint()
-        ..shader = Gradient.linear(b.topLeft, b.bottomRight, [
-          P.dustyBlue,
-          P.sage,
-          P.amber,
-        ]),
+        // Three colours need explicit stops (dart:ui throws otherwise).
+        ..shader = Gradient.linear(
+          b.topLeft,
+          b.bottomRight,
+          [P.dustyBlue, P.sage, P.amber],
+          [0, 0.5, 1],
+        ),
     );
   } else {
     p.panel(
