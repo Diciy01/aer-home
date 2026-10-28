@@ -547,8 +547,9 @@ func TestConfigValidation(t *testing.T) {
 }
 
 func TestDeployExampleLoads(t *testing.T) {
+	dir := t.TempDir()
 	c, err := config.Load(filepath.Join("..", "..", "..", "..", "deploy", "core-network.example.json"),
-		func(string) (string, bool) { return "", false })
+		func(k string) (string, bool) { return dir, k == "AER_DATA_DIR" })
 	if err != nil || len(c.Network.Sunshine) != 1 || len(c.Network.Internet.Targets) != 2 {
 		t.Fatalf("example: %+v %v", c.Network, err)
 	}
