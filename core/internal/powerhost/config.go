@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 )
 
@@ -63,7 +64,7 @@ func (c Config) Validate() error {
 			errs = append(errs, fmt.Errorf("allow: %q, want %v", a, allActions))
 		}
 	}
-	if len(c.BootNextHelper) == 0 || !filepath.IsAbs(c.BootNextHelper[len(c.BootNextHelper)-1]) {
+	if runtime.GOOS != "windows" && (len(c.BootNextHelper) == 0 || !filepath.IsAbs(c.BootNextHelper[len(c.BootNextHelper)-1])) {
 		errs = append(errs, errors.New("bootNextHelper: argv ending with the absolute path of efibootmgr"))
 	}
 	if c.WindowsDelaySec < 0 || c.WindowsDelaySec > 600 {

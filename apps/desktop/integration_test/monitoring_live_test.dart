@@ -9,6 +9,7 @@
 //
 // Registry objects are TEST DATA named "(тест)".
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:aer_home_desktop/src/app.dart';
@@ -73,6 +74,85 @@ void main() {
       baseUri: endpoint.baseUri,
       tokenProvider: endpoint.readToken,
     );
+    // Optional Windows stand setup through the app's own API client. A quiet
+    // Event Log may be empty: seed an explicitly synthetic UTF-8 warning rather
+    // than causing a real OS failure. Real metrics still come from aer-agent.
+    if (!offline && _env['AER_TEST_AGENT_BIN'] != null) {
+      if (endpoint.baseUri.host != '127.0.0.1' ||
+          endpoint.baseUri.port == 8787) {
+        fail('agent fixture requires an isolated loopback Core');
+      }
+      await tester.runAsync(() async {
+        final entity = await client.request(
+          'POST',
+          '/registry/entities',
+          body: {'name': 'Рабочий ПК (тест)', 'type': 'computer'},
+        ) as Map<String, dynamic>;
+        final (_, token) = await HttpMonitoringApi(client)
+            .createAgent(entity['id'] as String, 'Windows M10 test', 'host');
+        final dir = Directory(_env['AER_DESKTOP_DATA_DIR']!);
+        await dir.create(recursive: true);
+        final tokenPath = '${dir.path}/test-agent.token';
+        await File(tokenPath).writeAsString(token);
+        final config = File('${dir.path}/test-agent.json');
+        await config.writeAsString(
+          jsonEncode({
+            'coreUrl': endpoint.baseUri.toString(),
+            'tokenFile': tokenPath,
+            'intervalSec': 5,
+            'collectors': {
+              'systemLogs': false,
+              'services': ['Spooler'],
+            },
+          }),
+        );
+        final agent = await Process.start(_env['AER_TEST_AGENT_BIN']!, [
+          '-config',
+          config.path,
+        ]);
+        final output = StringBuffer();
+        agent.stdout.transform(utf8.decoder).listen(output.write);
+        agent.stderr.transform(utf8.decoder).listen(output.write);
+        addTearDown(() async {
+          agent.kill(); // Only the child this test created; graceful Run cancellation is tested in Go.
+          await agent.exitCode;
+          expect(
+            output.toString().contains(token),
+            false,
+            reason: 'no token in agent logs',
+          );
+        });
+        final reporter = http.Client();
+        try {
+          final response = await reporter.post(
+            endpoint.baseUri.resolve('/api/v1/monitoring/agent/report'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'agent': {
+                'version': 'test-fixture',
+                'os': Platform.operatingSystem,
+              },
+              'samples': [],
+              'logs': [
+                {
+                  'at': DateTime.now().toUtc().toIso8601String(),
+                  'level': 'warning',
+                  'source': 'aer.test.fixture',
+                  'message': 'Тестовый журнал M10: проверка UTF-8',
+                },
+              ],
+            }),
+          );
+          expect(response.statusCode, 200);
+        } finally {
+          reporter.close();
+        }
+        await Future<void>.delayed(const Duration(seconds: 6));
+      });
+    }
     final connection = ConnectionController(client);
     final registryApi = HttpRegistryApi(client);
     final sceneApi = HttpSceneApi(client);

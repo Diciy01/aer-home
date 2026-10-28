@@ -1,0 +1,7 @@
+{
+  "coreUrl": "http://192.168.1.10:8787",
+  "tokenFile": "C:\\Users\\USER\\AppData\\Local\\aer-home\\power-host.token",
+  "execute": false,
+  "allow": ["shutdown", "reboot", "suspend", "bootNext"],
+  "windowsDelaySec": 30
+}

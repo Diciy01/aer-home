@@ -153,12 +153,14 @@ func (g *gnomeBackend) Username() string { return g.c.RDPUser }
 
 // windowsBackend: built-in Windows RDP. AER never changes the Windows
 // account password, so sessions use the user's own credentials (NLA) and
-// the agent only reports readiness. UNVERIFIED on real Windows (M07 plan).
+// the agent only probes availability. It cannot enforce session credentials,
+// certificate pinning, permissions or revocation. Until a managed Windows
+// adapter exists (M14.4), never authorize a session on this backend.
 type windowsBackend struct{ c Config }
 
 func (w *windowsBackend) Prepare(context.Context) error { return nil }
 func (w *windowsBackend) Open(context.Context, string, string) error {
-	return nil
+	return errors.New("windows-rdp: managed sessions unsupported (credentials, certificate and revocation require a Windows host adapter)")
 }
 func (w *windowsBackend) Close(context.Context) error { return nil }
 func (w *windowsBackend) Ready(ctx context.Context) (bool, string) {
@@ -168,7 +170,7 @@ func (w *windowsBackend) Ready(ctx context.Context) (bool, string) {
 		return false, "Встроенный RDP Windows не слушает порт (выключен или Windows Home)"
 	}
 	conn.Close()
-	return true, "Встроенный RDP Windows включён (вход — учётной записью Windows)"
+	return false, "Порт RDP Windows доступен, но управляемые сеансы AER не поддерживаются: сертификат, права и отзыв требуют Windows-адаптера (M14.4)"
 }
 func (w *windowsBackend) Username() string { return "" }
 

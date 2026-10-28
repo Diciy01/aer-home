@@ -152,12 +152,13 @@ func (e *CoreError) Revoked() bool { return e.Status == http.StatusUnauthorized 
 // longer considers active (e.g. ended while the agent was away).
 func (a *Agent) Hello(ctx context.Context) error {
 	ready, reason := a.backend.Ready(ctx)
+	managed := a.cfg.Backend != "windows-rdp"
 	host, _ := os.Hostname()
 	body := map[string]any{
 		"os": runtime.GOOS, "hostname": host, "version": Version, "backend": a.cfg.Backend,
 		"address": a.cfg.Address, "port": a.cfg.Port, "certPem": a.certPEM, "monitors": 1,
-		"capabilities": map[string]bool{"desktop": true, "input": true, "clipboard": a.cfg.Clipboard,
-			"files": a.cfg.Files.Enabled, "apps": false},
+		"capabilities": map[string]bool{"desktop": managed, "input": managed, "clipboard": managed && a.cfg.Clipboard,
+			"files": managed && a.cfg.Files.Enabled, "apps": false},
 		"approval": a.cfg.Approval, "ready": ready, "reason": reason, "username": a.backend.Username(),
 	}
 	if a.cfg.Files.Enabled {
