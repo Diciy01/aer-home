@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+
+	"aerhome/core/internal/foundation/netx"
 )
 
 // Bots configures the M06 Bots module. Everything that can execute or reach
@@ -77,7 +79,7 @@ type TelegramToken struct {
 func DefaultBots() Bots {
 	return Bots{
 		TelegramAPIBase:    "https://api.telegram.org",
-		DockerSocket:       "/var/run/docker.sock",
+		DockerSocket:       netx.DefaultDockerSocket,
 		MaxConcurrentOps:   2,
 		OpTimeoutSec:       30,
 		SyncIntervalSec:    60,
@@ -117,8 +119,8 @@ func (b Bots) Validate() error {
 	if u, err := url.Parse(b.TelegramAPIBase); err != nil || (u.Scheme != "https" && u.Scheme != "http") {
 		errs = append(errs, fmt.Errorf("bots.telegramApiBase %q: want an http(s) URL", b.TelegramAPIBase))
 	}
-	if !filepath.IsAbs(b.DockerSocket) {
-		errs = append(errs, fmt.Errorf("bots.dockerSocket %q: want a local unix socket path (no TCP)", b.DockerSocket))
+	if !netx.IsLocalSocket(b.DockerSocket) {
+		errs = append(errs, fmt.Errorf("bots.dockerSocket %q: want a local unix socket or named pipe (no TCP)", b.DockerSocket))
 	}
 	seen := map[string]bool{}
 	id := func(kind, v string) {

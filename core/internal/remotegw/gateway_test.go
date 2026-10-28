@@ -26,6 +26,7 @@ import (
 	"aerhome/core/internal/modules"
 	"aerhome/core/internal/remoteengine"
 	"aerhome/core/internal/remotehost"
+	"aerhome/core/internal/testenv"
 )
 
 // End-to-end on loopback only: a real in-process Core, the Gateway with
@@ -243,7 +244,7 @@ func (s *stand) addHost(name string, viaGateway bool) *host {
 	filesPort := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 	acfg := remotehost.Config{CoreURL: s.core.URL, TokenFile: tok, StateDir: filepath.Join(d, "agent"), Backend: "gnome-rdp",
-		Grdctl: []string{"grdctl"}, Daemon: []string{"/bin/true"}, Address: "192.0.2.10", Port: h.rdp.port(), RDPUser: "aer", Approval: "auto",
+		Grdctl: []string{"grdctl"}, Daemon: []string{testenv.ExistingFile(t)}, Address: "192.0.2.10", Port: h.rdp.port(), RDPUser: "aer", Approval: "auto",
 		Clipboard: true, Files: remotehost.Files{Enabled: true, Dir: h.files, Port: filesPort, MaxBytes: 1 << 20},
 		GatewayURL: s.gwSrv.URL, GatewayCertSHA256: s.gwFP}
 	if viaGateway {
@@ -607,7 +608,7 @@ func TestGatewayRefusesBadInput(t *testing.T) {
 
 func TestGatewayConfig(t *testing.T) {
 	c := Default()
-	c.ListenAddr, c.TokenFile, c.StateDir = "0.0.0.0:8443", "/x/t", "/x"
+	c.ListenAddr, c.TokenFile, c.StateDir = "0.0.0.0:8443", testenv.Abs("/x/t"), testenv.Abs("/x")
 	for url, ok := range map[string]bool{"http://127.0.0.1:8787": true, "http://localhost:8787": true, "https://core.lan:8787": true,
 		"http://192.0.2.20:8787": false, "ftp://x": false} {
 		c.CoreURL = url
@@ -623,6 +624,7 @@ func TestGatewayConfig(t *testing.T) {
 }
 
 func TestDeployExampleLoads(t *testing.T) {
+	testenv.LinuxOnly(t, "deploy/remote-gateway.example.json (Linux server)")
 	if _, err := Load(filepath.Join("..", "..", "..", "deploy", "remote-gateway.example.json")); err != nil {
 		t.Fatal(err)
 	}

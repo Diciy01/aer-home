@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"aerhome/core/internal/foundation/netx"
 	"aerhome/core/internal/modules/registry"
 )
 
@@ -46,8 +47,7 @@ func newDockerWatcher(s *Service) *DockerWatcher {
 	sock := s.cfg.Docker.Socket
 	tr := &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", sock)
+			return netx.DialLocal(ctx, sock)
 		},
 		MaxIdleConns: 2,
 	}
@@ -77,7 +77,7 @@ func dockerReason(err error, sock string) string {
 		return "Сокет " + sock + " не найден: служба Docker не запущена или не установлена"
 	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.EACCES):
 		return "Нет прав на " + sock + " (нужно членство в группе docker); AER HOME права не меняет"
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case netx.IsConnRefused(err):
 		return "Docker не принимает подключения через " + sock
 	}
 	return "Docker недоступен: " + truncate(Redact(err.Error()), 160)

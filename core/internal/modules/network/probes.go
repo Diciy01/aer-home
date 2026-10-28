@@ -13,8 +13,9 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
+
+	"aerhome/core/internal/foundation/netx"
 )
 
 // result is what one probe found out (before failure confirmation).
@@ -45,13 +46,13 @@ func shortErr(err error) string {
 		return "имя не разрешается (DNS)"
 	case errors.Is(err, context.DeadlineExceeded), strings.Contains(err.Error(), "timeout"):
 		return "тайм-аут"
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case netx.IsConnRefused(err):
 		return "соединение отклонено"
-	case errors.Is(err, syscall.EHOSTUNREACH):
+	case netx.IsHostUnreachable(err):
 		return "хост недостижим"
-	case errors.Is(err, syscall.ENETUNREACH):
+	case netx.IsNetUnreachable(err):
 		return "нет маршрута в сеть"
-	case errors.Is(err, syscall.ECONNRESET):
+	case netx.IsConnReset(err):
 		return "соединение сброшено"
 	}
 	return "сетевая ошибка"
@@ -132,7 +133,7 @@ func probeInternet(ctx context.Context, dial Dialer, targets []string, timeout t
 		o := <-ch
 		r := TargetResult{Target: targets[o.i]}
 		_, isTLS := splitTarget(targets[o.i])
-		if o.err == nil || (!isTLS && errors.Is(o.err, syscall.ECONNREFUSED)) {
+		if o.err == nil || (!isTLS && netx.IsConnRefused(o.err)) {
 			d := o.d
 			r.OK, r.LatencyMs = true, ms(&d)
 			if best == nil || d < *best {
@@ -206,7 +207,7 @@ func probeSunshine(ctx context.Context, client *http.Client, dial Dialer, infoUR
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		if errors.Is(err, syscall.ECONNREFUSED) {
+		if netx.IsConnRefused(err) {
 			return result{status: StatusDown, reason: "Sunshine не отвечает: порт закрыт (сервер не запущен?)"}
 		}
 		return result{status: StatusDown, reason: "Sunshine не отвечает: " + shortErr(err)}

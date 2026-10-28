@@ -11,6 +11,7 @@ import (
 
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/modules"
+	"aerhome/core/internal/testenv"
 )
 
 // TestBotsContract checks Bots payloads against the contract, the split of
@@ -20,7 +21,7 @@ func TestBotsContract(t *testing.T) {
 	cfg := testConfig(t, t.TempDir())
 	// TEST DATA: an isolated test process, the only controller of this Core.
 	cfg.Bots.Controllers = []config.BotController{{ID: "testproc", Kind: "process",
-		Command: []string{"/bin/sh", "-c", "while true; do sleep 0.1; done"}, StopTimeoutSec: 2, Allow: []string{"start", "stop", "restart"}}}
+		Command: []string{testenv.Shell(t), "-c", "while true; do sleep 0.1; done"}, StopTimeoutSec: 2, Allow: []string{"start", "stop", "restart"}}}
 	c := newCore(t, cfg, modules.All()...)
 	srv := httptest.NewServer(c.Handler())
 	defer srv.Close()

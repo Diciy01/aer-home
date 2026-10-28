@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"aerhome/core/internal/foundation/netx"
 	"aerhome/core/internal/modules/registry"
 )
 
@@ -317,7 +317,7 @@ func (s *Service) probeTCP(ctx context.Context, host string, ports []int) observ
 		case r.err == nil:
 			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, latency: &r.took,
 				reason: fmt.Sprintf("Отвечает на TCP-порт %d", r.port)}
-		case errors.Is(r.err, syscall.ECONNREFUSED):
+		case netx.IsConnRefused(r.err):
 			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, latency: &r.took,
 				reason: fmt.Sprintf("Хост в сети (порт %d закрыт, но ответил отказом)", r.port)}
 		case isDNSError(r.err):
@@ -344,13 +344,13 @@ func shortNetErr(err error) string {
 		return "нет ответа"
 	case errors.Is(err, context.DeadlineExceeded), strings.Contains(err.Error(), "timeout"):
 		return "тайм-аут"
-	case errors.Is(err, syscall.EHOSTUNREACH):
+	case netx.IsHostUnreachable(err):
 		return "хост недостижим"
-	case errors.Is(err, syscall.ENETUNREACH):
+	case netx.IsNetUnreachable(err):
 		return "сеть недостижима"
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case netx.IsConnRefused(err):
 		return "соединение отклонено"
-	case errors.Is(err, syscall.ECONNRESET):
+	case netx.IsConnReset(err):
 		return "соединение сброшено"
 	}
 	return truncate(Redact(err.Error()), 120)

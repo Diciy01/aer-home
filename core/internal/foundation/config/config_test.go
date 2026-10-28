@@ -3,11 +3,19 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"aerhome/core/internal/testenv"
 )
 
+// envFrom: on Windows the default data dir comes from LOCALAPPDATA, derived
+// here from HOME so the same cases run on both systems.
 func envFrom(m map[string]string) EnvLookup {
+	if h, ok := m["HOME"]; ok && runtime.GOOS == "windows" {
+		m["LOCALAPPDATA"] = testenv.Abs(h)
+	}
 	return func(k string) (string, bool) { v, ok := m[k]; return v, ok }
 }
 
@@ -19,7 +27,11 @@ func TestDefaultsAreValidAndLoopback(t *testing.T) {
 	if cfg.Mode != ModeDevelopment || cfg.ListenAddr != "127.0.0.1:8787" {
 		t.Fatalf("unexpected defaults: %+v", cfg)
 	}
-	if cfg.DataDir != "/home/test/.local/share/aer-home/core" {
+	want := "/home/test/.local/share/aer-home/core"
+	if runtime.GOOS == "windows" {
+		want = testenv.Abs("/home/test/aer-home/core")
+	}
+	if cfg.DataDir != want {
 		t.Fatalf("DataDir = %q", cfg.DataDir)
 	}
 	if !cfg.IsDemo() {

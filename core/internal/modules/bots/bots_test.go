@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,7 @@ import (
 	"aerhome/core/internal/foundation/storage"
 	"aerhome/core/internal/modules/monitoring"
 	"aerhome/core/internal/modules/registry"
+	"aerhome/core/internal/testenv"
 )
 
 // TEST DATA: every bot, process and server below is a fixture of this test.
@@ -107,7 +109,7 @@ func fields(err error) map[string]string {
 
 func TestAdaptersRegistered(t *testing.T) {
 	f := newFixture(t, func(c *config.Bots) {
-		c.Controllers = []config.BotController{{ID: "echo", Kind: "process", Command: []string{"/bin/sh", "-c", "true"}, StopTimeoutSec: 2, Allow: []string{"start"}}}
+		c.Controllers = []config.BotController{{ID: "echo", Kind: "process", Command: []string{testenv.Shell(t), "-c", "true"}, StopTimeoutSec: 2, Allow: []string{"start"}}}
 	})
 	got := map[string]AdapterInfo{}
 	for _, a := range f.svc.Adapters(f.ctx) {
@@ -118,7 +120,11 @@ func TestAdaptersRegistered(t *testing.T) {
 			t.Errorf("adapter %s not registered", id)
 		}
 	}
-	if p := got["process"]; p.Status != "ok" || len(p.Instances) != 1 || p.Instances[0].Target != "sh -c" {
+	target := "sh -c"
+	if runtime.GOOS == "windows" {
+		target = "sh.exe -c"
+	}
+	if p := got["process"]; p.Status != "ok" || len(p.Instances) != 1 || p.Instances[0].Target != target {
 		t.Errorf("process adapter: %+v", p)
 	}
 	if got["docker"].Status != "disabled" || got["n8n"].Status != "disabled" {
@@ -342,10 +348,11 @@ func TestJobsHistory(t *testing.T) {
 	}
 }
 
-func processCfg(script string, allow ...string) func(*config.Bots) {
+func processCfg(t *testing.T, script string, allow ...string) func(*config.Bots) {
+	sh := testenv.Shell(t)
 	return func(c *config.Bots) {
 		c.Controllers = append(c.Controllers, config.BotController{ID: "testproc", Label: "Тестовый процесс", Kind: "process",
-			Command: []string{"/bin/sh", "-c", script}, StopTimeoutSec: 2, Allow: allow})
+			Command: []string{sh, "-c", script}, StopTimeoutSec: 2, Allow: allow})
 	}
 }
 
@@ -375,7 +382,7 @@ func waitFor(t *testing.T, what string, cond func() bool) {
 
 func TestProcessControl(t *testing.T) {
 	// An isolated test process: prints lines and sleeps; nothing else runs.
-	f := newFixture(t, processCfg(`echo "INFO test bot started"; echo "ERROR fake failure token=abc123secretvalue" >&2; while true; do sleep 0.1; done`, "start", "stop", "restart"))
+	f := newFixture(t, processCfg(t, `echo "INFO test bot started"; echo "ERROR fake failure token=abc123secretvalue" >&2; while true; do sleep 0.1; done`, "start", "stop", "restart"))
 	c := f.bot(t, NewBot{Name: "Тестовый процесс", Type: "process", ControllerID: "testproc"})
 	id := c.Bot.EntityID
 	if c.Bot.LogSource != "controller" || c.Bot.RuntimeState == nil || c.Bot.RuntimeState.State != "stopped" {
@@ -480,7 +487,7 @@ func mustCtl(f *fixture, id string) config.BotController {
 }
 
 func TestProcessCrashOpensIncident(t *testing.T) {
-	f := newFixture(t, processCfg(`echo "Traceback: boom" >&2; exit 3`, "start"))
+	f := newFixture(t, processCfg(t, `echo "Traceback: boom" >&2; exit 3`, "start"))
 	c := f.bot(t, NewBot{Name: "Падающий процесс", Type: "process", ControllerID: "testproc"})
 	id := c.Bot.EntityID
 	if _, err := f.do(t, id, "start", "key-crash-1", true); err != nil {
@@ -507,7 +514,7 @@ func TestProcessCrashOpensIncident(t *testing.T) {
 
 func TestConcurrentActionsOnOneBot(t *testing.T) {
 	// The stop takes ~1 s (trap ignores TERM) so the second request overlaps.
-	f := newFixture(t, processCfg(`trap "" TERM; while true; do sleep 0.05; done`, "start", "stop"))
+	f := newFixture(t, processCfg(t, `trap "" TERM; while true; do sleep 0.05; done`, "start", "stop"))
 	c := f.bot(t, NewBot{Name: "Медленный", Type: "process", ControllerID: "testproc"})
 	id := c.Bot.EntityID
 	if _, err := f.do(t, id, "start", "key-slow-start", true); err != nil {
@@ -817,7 +824,7 @@ func TestTelegramCheckNeverLeaksToken(t *testing.T) {
 func TestConfigRejectsUnsafeControllers(t *testing.T) {
 	bad := []config.BotController{
 		{ID: "rel", Kind: "process", Command: []string{"python3", "bot.py"}, StopTimeoutSec: 5},
-		{ID: "env", Kind: "process", Command: []string{"/usr/bin/python3"}, Env: []string{"BOT_TOKEN=123"}, StopTimeoutSec: 5},
+		{ID: "env", Kind: "process", Command: []string{testenv.Abs("/usr/bin/python3")}, Env: []string{"BOT_TOKEN=123"}, StopTimeoutSec: 5},
 		{ID: "ctr", Kind: "docker", Container: "a b"},
 		{ID: "act", Kind: "docker", Container: "x", Allow: []string{"exec"}},
 		{ID: "Bad ID", Kind: "shell"},

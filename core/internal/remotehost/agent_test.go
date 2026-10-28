@@ -25,6 +25,7 @@ import (
 	"aerhome/core/internal/core"
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/modules"
+	"aerhome/core/internal/testenv"
 )
 
 // End-to-end control plane: a real in-process Core and the host agent with
@@ -162,7 +163,7 @@ func TestAgentEndToEndWithFakeRDP(t *testing.T) {
 
 	rdpPort, filesPort := freePort(t), freePort(t)
 	acfg := Config{CoreURL: srv.URL, TokenFile: tokFile, StateDir: filepath.Join(dir, "agent"), Backend: "gnome-rdp",
-		Grdctl: []string{"grdctl", "--headless"}, Daemon: []string{"/bin/true"}, Address: "127.0.0.1", Port: rdpPort, RDPUser: "aer", Approval: "auto",
+		Grdctl: []string{"grdctl", "--headless"}, Daemon: []string{testenv.ExistingFile(t)}, Address: "127.0.0.1", Port: rdpPort, RDPUser: "aer", Approval: "auto",
 		Clipboard: true, Files: Files{Enabled: true, Dir: filepath.Join(dir, "exchange"), Port: filesPort, MaxBytes: 1 << 20}}
 	if err := acfg.Validate(); err != nil {
 		t.Fatal(err)
@@ -324,7 +325,7 @@ func TestAgentEndToEndWithFakeRDP(t *testing.T) {
 
 func TestLocalExpiryWithoutCore(t *testing.T) {
 	grd := &fakeGrd{}
-	a := &Agent{cfg: Config{Port: 1}, backend: &gnomeBackend{c: Config{Grdctl: []string{"grdctl"}, Daemon: []string{"/bin/true"}}, run: grd.run, start: grd.start},
+	a := &Agent{cfg: Config{Port: 1}, backend: &gnomeBackend{c: Config{Grdctl: []string{"grdctl"}, Daemon: []string{testenv.ExistingFile(t)}}, run: grd.run, start: grd.start},
 		log: slog.New(slog.DiscardHandler), http: &http.Client{Timeout: time.Second}, Connections: func() int { return 0 }}
 	a.cfg.CoreURL, a.cfg.TokenFile = "http://127.0.0.1:1", filepath.Join(t.TempDir(), "none")
 	a.Handle(context.Background(), Command{Type: "open", SessionID: "s1", ExpiresAt: time.Now().Add(1500 * time.Millisecond)})
@@ -362,6 +363,7 @@ func TestPasswordShape(t *testing.T) {
 }
 
 func TestDeployExampleLoads(t *testing.T) {
+	testenv.LinuxOnly(t, "deploy/remote-host.example.json (gnome-rdp)")
 	c, err := Load(filepath.Join("..", "..", "..", "deploy", "remote-host.example.json"))
 	if err != nil || c.Approval != "prompt" || !c.Files.Enabled || c.Daemon[0] != "/usr/libexec/gnome-remote-desktop-daemon" {
 		t.Fatalf("example: %+v %v", c, err)

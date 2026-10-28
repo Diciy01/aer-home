@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"aerhome/core/internal/foundation/config"
+	"aerhome/core/internal/foundation/netx"
 	"aerhome/core/internal/modules/monitoring"
 )
 
@@ -30,8 +31,7 @@ type dockerAdapter struct {
 func newDockerAdapter(s *Service) *dockerAdapter {
 	sock := s.cfg.DockerSocket
 	tr := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-		var d net.Dialer
-		return d.DialContext(ctx, "unix", sock)
+		return netx.DialLocal(ctx, sock)
 	}, MaxIdleConns: 1}
 	return &dockerAdapter{s: s, sock: sock, client: &http.Client{Transport: tr, Timeout: 60 * time.Second}}
 }
@@ -62,7 +62,7 @@ func (a *dockerAdapter) reason(err error) string {
 		return "Сокет " + a.sock + " не найден: Docker не запущен или не установлен (AER HOME его не устанавливает)"
 	case errors.Is(err, fs.ErrPermission), errors.Is(err, syscall.EACCES):
 		return "Нет прав на " + a.sock + " (нужна группа docker); AER HOME права не меняет"
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case netx.IsConnRefused(err):
 		return "Docker не принимает подключения"
 	}
 	return "Docker недоступен: " + monitoring.Redact(err.Error())

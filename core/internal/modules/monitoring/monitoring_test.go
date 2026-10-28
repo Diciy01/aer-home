@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -787,7 +788,11 @@ func (d *fakeDocker) handler() http.Handler {
 }
 
 func TestDockerIntegration(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "aerdock")
+	base := "/tmp" // short: sun_path is ~100 bytes
+	if runtime.GOOS == "windows" {
+		base = os.TempDir() // AF_UNIX works on Windows 10 1803+
+	}
+	dir, err := os.MkdirTemp(base, "aerdock")
 	if err != nil {
 		t.Fatal(err)
 	}

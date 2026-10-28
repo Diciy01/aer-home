@@ -20,6 +20,7 @@ func openDB(t *testing.T, path string) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { db.Close() }) // before TempDir removal: Windows cannot delete an open file
 	if _, err := storage.Migrate(context.Background(), db, Name, migrations); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +30,6 @@ func openDB(t *testing.T, path string) *sql.DB {
 func newTestService(t *testing.T) *Service {
 	t.Helper()
 	db := openDB(t, filepath.Join(t.TempDir(), "reg.db"))
-	t.Cleanup(func() { db.Close() })
 	clock := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
 	return NewService(db, DefaultCatalog(), func() time.Time {
 		clock = clock.Add(time.Second)

@@ -4,10 +4,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"aerhome/core/internal/testenv"
 )
 
 // The shipped examples must stay loadable: they are what owners copy.
 func TestDeployExamplesLoad(t *testing.T) {
+	testenv.LinuxOnly(t, "deploy/core-*.example.json (Linux server paths)")
 	env := func(k string) (string, bool) {
 		if k == "HOME" {
 			return "/home/example", true // examples may rely on the default data dir
@@ -33,7 +36,7 @@ func TestBotsDefaultsHaveNoControllers(t *testing.T) {
 	if err := b.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	b.Controllers = []BotController{{ID: "a", Kind: "process", Command: []string{"/bin/true"}, StopTimeoutSec: 1},
+	b.Controllers = []BotController{{ID: "a", Kind: "process", Command: []string{testenv.Abs("/bin/true")}, StopTimeoutSec: 1},
 		{ID: "a", Kind: "docker", Container: "x"}}
 	if err := b.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate") {
 		t.Errorf("duplicate ids: %v", err)

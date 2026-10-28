@@ -19,6 +19,7 @@ import (
 	"aerhome/core/internal/core"
 	"aerhome/core/internal/foundation/config"
 	"aerhome/core/internal/modules"
+	"aerhome/core/internal/testenv"
 )
 
 // End-to-end: a real in-process Core and the power agent with a FAKE
@@ -464,6 +465,7 @@ func TestAgentRevokedAndNoCore(t *testing.T) {
 }
 
 func TestDeployExampleLoads(t *testing.T) {
+	testenv.LinuxOnly(t, "deploy/power-host.example.json (Linux paths)")
 	c, err := Load(filepath.Join("..", "..", "..", "deploy", "power-host.example.json"))
 	if err != nil || c.Execute || len(c.Allow) != 4 {
 		t.Fatalf("example: %+v %v", c, err)

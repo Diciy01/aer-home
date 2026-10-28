@@ -4,7 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
+
+	"aerhome/core/internal/foundation/netx"
 )
 
 // Monitoring configures the M05 Monitoring module. Every interval, limit and
@@ -93,7 +94,7 @@ func DefaultMonitoring() Monitoring {
 		},
 		Docker: DockerMonitoring{
 			Enabled:          true,
-			Socket:           "/var/run/docker.sock",
+			Socket:           netx.DefaultDockerSocket,
 			IntervalSec:      30,
 			StatsIntervalSec: 60,
 		},
@@ -132,7 +133,7 @@ func (m Monitoring) Validate() error {
 		errs = append(errs, errors.New("monitoring.thresholds: temperatures must be positive"))
 	}
 	if m.Docker.Enabled {
-		if !strings.HasPrefix(m.Docker.Socket, "/") && !strings.HasPrefix(m.Docker.Socket, `\\.\pipe\`) {
+		if !netx.IsLocalSocket(m.Docker.Socket) {
 			errs = append(errs, fmt.Errorf("monitoring.docker.socket %q: want a local unix socket or named pipe (no TCP)", m.Docker.Socket))
 		}
 		in("docker.intervalSec", m.Docker.IntervalSec, 5, 3600)
