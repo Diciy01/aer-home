@@ -18,6 +18,8 @@ import 'src/state/app_section.dart';
 import 'src/state/bots_controller.dart';
 import 'src/state/network_controller.dart';
 import 'src/state/power_controller.dart';
+import 'src/remote/gateway_profile.dart';
+import 'src/state/gateway_remote_controller.dart';
 import 'src/state/remote_controller.dart';
 import 'src/core_api/monitoring_api.dart';
 import 'src/state/connection_controller.dart';
@@ -45,10 +47,31 @@ void main() {
   // The house shows bot panels on bound objects, so bots load at startup.
   final bots = BotsController(HttpBotsApi(client), connection);
   unawaited(bots.start());
+  // Outside the home AER HOME reaches the owner's Remote Gateway (M14.5).
+  // The client credential lives in the OS keyring; an isolated test stand
+  // may ask for a 0600 file instead (never the user's keyring in tests).
+  final dataDir = sceneCache.file.parent;
+  final fileSecrets =
+      Platform.environment['AER_REMOTE_SECRET_STORE'] == 'file' &&
+      (Platform.environment['AER_DESKTOP_DATA_DIR'] ?? '').isNotEmpty;
+  final embedded = RemoteController.defaultEmbedded();
   final remote = RemoteController(
     HttpRemoteApi(client),
     connection,
     sourceName: 'AER HOME (${Platform.localHostname})',
+    embedded: embedded,
+    gateway: GatewayRemoteController(
+      profiles: GatewayProfileStore(
+        File('${dataDir.path}/remote-gateway.json'),
+      ),
+      credentials: fileSecrets
+          ? FileCredentialStore(
+              File('${dataDir.path}/remote-gateway.credential'),
+            )
+          : SecureCredentialStore(),
+      embedded: embedded,
+      deviceName: 'AER HOME (${Platform.localHostname})',
+    ),
   );
   unawaited(remote.start());
   // The house shows power state and actions on bound computers.

@@ -9,6 +9,7 @@ import '../core_api/remote_api.dart';
 import '../remote/files_client.dart';
 import '../remote/rdp_launcher.dart';
 import 'connection_controller.dart';
+import 'gateway_remote_controller.dart';
 
 /// Where the local connection attempt is.
 enum RemotePhase {
@@ -54,6 +55,7 @@ class RemoteController extends ChangeNotifier {
     this._connection, {
     RdpLauncher? launcher,
     EmbeddedFactory? embedded,
+    this.gateway,
     this.sourceName = 'AER HOME Desktop',
     this.interval = const Duration(seconds: 10),
     this.autoPoll = true,
@@ -77,11 +79,17 @@ class RemoteController extends ChangeNotifier {
 
   bool get embeddedAvailable => embedded != null;
 
+  /// AER HOME as a remote client through the owner's Gateway (M14.5);
+  /// works without Core (outside the home).
+  final GatewayRemoteController? gateway;
+
   /// Where the picture is shown for the next or current session.
   String viewerNameFor(ActiveRemote? a) =>
       (a?.viewer != null || (a == null && preferEmbedded && embeddedAvailable))
       ? 'встроенный просмотр AER HOME'
       : 'окно ${launcher.clientName}';
+
+  static EmbeddedFactory? defaultEmbedded() => _defaultEmbedded();
 
   static EmbeddedFactory? _defaultEmbedded() => RdpNative.load() == null
       ? null
@@ -98,6 +106,8 @@ class RemoteController extends ChangeNotifier {
 
   List<RemoteHost> _hosts = const [];
   List<RemoteSession> _history = const [];
+  List<RemoteClientInfo> _clients = const [];
+  RemoteGatewayInfo? _gatewayInfo;
   DateTime? _updatedAt;
   bool _stale = false;
   bool _loading = false;
@@ -111,6 +121,12 @@ class RemoteController extends ChangeNotifier {
 
   List<RemoteHost> get hosts => _hosts;
   List<RemoteSession> get history => _history;
+
+  /// Remote access clients (owner view, M14.5), newest first.
+  List<RemoteClientInfo> get clients => _clients;
+
+  /// What the Remote Gateway last reported (null: never).
+  RemoteGatewayInfo? get gatewayInfo => _gatewayInfo;
   DateTime? get updatedAt => _updatedAt;
   bool get isStale => _stale;
   bool get loading => _loading;
@@ -165,6 +181,12 @@ class RemoteController extends ChangeNotifier {
       final r = await Future.wait([api.hosts(), api.sessions(limit: 50)]);
       _hosts = r[0] as List<RemoteHost>;
       _history = r[1] as List<RemoteSession>;
+      // Clients and the Gateway are optional extras: an older Core without
+      // them must not break the section.
+      try {
+        _clients = await api.clients();
+        _gatewayInfo = await api.gateway();
+      } catch (_) {}
       _updatedAt = DateTime.now();
       _stale = false;
       _error = null;
@@ -397,6 +419,53 @@ class RemoteController extends ChangeNotifier {
     await refresh();
   }
 
+  /// Creates a client; the returned code is shown once and never stored.
+  Future<RemotePairingCode> createClient({
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async {
+    final p = await api.createClient(
+      name: name,
+      hosts: hosts,
+      clipboard: clipboard,
+      files: files,
+    );
+    await refresh();
+    return p;
+  }
+
+  Future<void> updateClient(
+    String id, {
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async {
+    await api.updateClient(
+      id,
+      name: name,
+      hosts: hosts,
+      clipboard: clipboard,
+      files: files,
+    );
+    await refresh();
+  }
+
+  /// New one-time code; pairing with it replaces the old credential.
+  Future<RemotePairingCode> repairClient(String id) async {
+    final p = await api.repairClient(id);
+    await refresh();
+    return p;
+  }
+
+  /// Revokes the client for good: Core revokes its sessions at once.
+  Future<void> revokeClient(String id) async {
+    await api.revokeClient(id);
+    await refresh();
+  }
+
   /// Where downloads go: ~/Downloads/AER Remote.
   static Directory downloadsDir() {
     final home =
@@ -415,6 +484,7 @@ class RemoteController extends ChangeNotifier {
     _sessionTimer?.cancel();
     _active?.files?.close();
     if (_active != null) _closeViewer(_active!);
+    gateway?.dispose();
     _connection.removeListener(_onConnection);
     super.dispose();
   }

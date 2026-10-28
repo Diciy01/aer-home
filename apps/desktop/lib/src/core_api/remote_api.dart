@@ -332,6 +332,93 @@ class RemoteGrant {
   final int filesMaxBytes;
 }
 
+/// A remote access client (AER Connect or AER HOME outside the home,
+/// ADR-017): its own credential, allowed computers and rights.
+class RemoteClientInfo {
+  const RemoteClientInfo({
+    required this.id,
+    required this.name,
+    required this.hosts,
+    required this.clipboard,
+    required this.files,
+    required this.deviceName,
+    required this.paired,
+    required this.pairPending,
+    required this.createdAt,
+    this.pairedAt,
+    this.lastSeenAt,
+    this.lastAddr = '',
+    this.revokedAt,
+  });
+
+  factory RemoteClientInfo.fromJson(Map<String, dynamic> j) => RemoteClientInfo(
+    id: j['id'] as String,
+    name: j['name'] as String? ?? '',
+    hosts: [for (final h in j['hosts'] as List? ?? const []) h as String],
+    clipboard: j['clipboard'] == true,
+    files: j['files'] == true,
+    deviceName: j['deviceName'] as String? ?? '',
+    paired: j['paired'] == true,
+    pairPending: j['pairPending'] == true,
+    createdAt: DateTime.parse(j['createdAt'] as String),
+    pairedAt: _time(j['pairedAt']),
+    lastSeenAt: _time(j['lastSeenAt']),
+    lastAddr: j['lastAddr'] as String? ?? '',
+    revokedAt: _time(j['revokedAt']),
+  );
+
+  final String id;
+  final String name;
+  final List<String> hosts;
+  final bool clipboard;
+  final bool files;
+  final String deviceName;
+  final bool paired;
+  final bool pairPending;
+  final DateTime createdAt;
+  final DateTime? pairedAt;
+  final DateTime? lastSeenAt;
+  final String lastAddr;
+  final DateTime? revokedAt;
+
+  bool get revoked => revokedAt != null;
+}
+
+/// One-time pairing code (shown once; 15 minutes, one use).
+class RemotePairingCode {
+  const RemotePairingCode(this.client, this.code, this.expiresAt);
+  factory RemotePairingCode.fromJson(Map<String, dynamic> j) =>
+      RemotePairingCode(
+        RemoteClientInfo.fromJson(_obj(j['client'])),
+        j['code'] as String,
+        DateTime.parse(j['expiresAt'] as String),
+      );
+  final RemoteClientInfo client;
+  final String code;
+  final DateTime expiresAt;
+}
+
+/// What the Remote Gateway reported to Core about itself.
+class RemoteGatewayInfo {
+  const RemoteGatewayInfo(
+    this.certSha256,
+    this.version,
+    this.seenAt,
+    this.online,
+  );
+  factory RemoteGatewayInfo.fromJson(Map<String, dynamic> j) =>
+      RemoteGatewayInfo(
+        j['certSha256'] as String,
+        j['version'] as String? ?? '',
+        DateTime.parse(j['seenAt'] as String),
+        j['online'] == true,
+      );
+  final String certSha256;
+  final String version;
+  final DateTime seenAt;
+  final bool online;
+}
+
 abstract interface class RemoteApi {
   Future<List<RemoteHost>> hosts();
   Future<RemoteHost> setPolicy(String entityId, RemotePolicy p);
@@ -348,11 +435,33 @@ abstract interface class RemoteApi {
   Future<RemoteSession> end(String id);
   Future<RemoteSession> revoke(String id);
   Future<({String status, String reason})> apps(String entityId);
+
+  // Remote access clients (M14.5, owner only).
+  Future<List<RemoteClientInfo>> clients();
+  Future<RemotePairingCode> createClient({
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  });
+  Future<RemoteClientInfo> updateClient(
+    String id, {
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  });
+  Future<RemotePairingCode> repairClient(String id);
+  Future<RemoteClientInfo> revokeClient(String id);
+  Future<RemoteGatewayInfo?> gateway();
 }
 
-class HttpRemoteApi implements RemoteApi {
+class HttpRemoteApi with HttpRemoteClientsApi implements RemoteApi {
   HttpRemoteApi(this._client);
   final CoreClient _client;
+
+  @override
+  CoreClient get core => _client;
 
   @override
   Future<List<RemoteHost>> hosts() async => [
@@ -439,3 +548,69 @@ class HttpRemoteApi implements RemoteApi {
 }
 
 String newRemoteKey() => newIdempotencyKey();
+
+/// Owner side of remote access clients (contract 0.11.0).
+mixin HttpRemoteClientsApi {
+  CoreClient get core;
+
+  Future<List<RemoteClientInfo>> clients() async => [
+    for (final c in await core.request('GET', '/remote/clients') as List)
+      RemoteClientInfo.fromJson(_obj(c)),
+  ];
+
+  Future<RemotePairingCode> createClient({
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async => RemotePairingCode.fromJson(
+    _obj(
+      await core.request(
+        'POST',
+        '/remote/clients',
+        body: {
+          'name': name,
+          'hosts': hosts,
+          'clipboard': clipboard,
+          'files': files,
+        },
+      ),
+    ),
+  );
+
+  Future<RemoteClientInfo> updateClient(
+    String id, {
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async => RemoteClientInfo.fromJson(
+    _obj(
+      await core.request(
+        'PUT',
+        '/remote/clients/$id',
+        body: {
+          'name': name,
+          'hosts': hosts,
+          'clipboard': clipboard,
+          'files': files,
+        },
+      ),
+    ),
+  );
+
+  Future<RemotePairingCode> repairClient(String id) async =>
+      RemotePairingCode.fromJson(
+        _obj(await core.request('POST', '/remote/clients/$id/pairing')),
+      );
+
+  Future<RemoteClientInfo> revokeClient(String id) async =>
+      RemoteClientInfo.fromJson(
+        _obj(await core.request('POST', '/remote/clients/$id/revoke')),
+      );
+
+  Future<RemoteGatewayInfo?> gateway() async {
+    final d = await core.request('GET', '/remote/gateway');
+    return d == null ? null : RemoteGatewayInfo.fromJson(_obj(d));
+  }
+}

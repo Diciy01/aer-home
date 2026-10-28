@@ -164,6 +164,91 @@ class FakeRemoteApi implements RemoteApi {
   @override
   Future<({String status, String reason})> apps(String entityId) async =>
       (status: 'unsupported', reason: 'весь рабочий стол');
+
+  // Remote access clients (fake, in memory).
+  final clientList = <RemoteClientInfo>[];
+  final codes = <String>[];
+  RemoteGatewayInfo? gw;
+
+  RemoteClientInfo _client(
+    String id,
+    String name,
+    List<String> hosts,
+    bool clip,
+    bool files, {
+    bool revoked = false,
+    bool pending = true,
+  }) => RemoteClientInfo(
+    id: id,
+    name: name,
+    hosts: hosts,
+    clipboard: clip,
+    files: files,
+    deviceName: '',
+    paired: false,
+    pairPending: pending && !revoked,
+    createdAt: r0,
+    revokedAt: revoked ? r0 : null,
+  );
+
+  RemotePairingCode _code(RemoteClientInfo c) {
+    final code = 'TEST-CODE-${codes.length}';
+    codes.add(code);
+    return RemotePairingCode(c, code, r0.add(const Duration(minutes: 15)));
+  }
+
+  @override
+  Future<List<RemoteClientInfo>> clients() async =>
+      List.of(clientList.reversed);
+  @override
+  Future<RemotePairingCode> createClient({
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async {
+    final c = _client(
+      'c${clientList.length + 1}',
+      name,
+      hosts,
+      clipboard,
+      files,
+    );
+    clientList.add(c);
+    return _code(c);
+  }
+
+  @override
+  Future<RemoteClientInfo> updateClient(
+    String id, {
+    required String name,
+    required List<String> hosts,
+    required bool clipboard,
+    required bool files,
+  }) async {
+    final i = clientList.indexWhere((c) => c.id == id);
+    return clientList[i] = _client(id, name, hosts, clipboard, files);
+  }
+
+  @override
+  Future<RemotePairingCode> repairClient(String id) async =>
+      _code(clientList.firstWhere((c) => c.id == id));
+  @override
+  Future<RemoteClientInfo> revokeClient(String id) async {
+    final i = clientList.indexWhere((c) => c.id == id);
+    final c = clientList[i];
+    return clientList[i] = _client(
+      id,
+      c.name,
+      c.hosts,
+      c.clipboard,
+      c.files,
+      revoked: true,
+    );
+  }
+
+  @override
+  Future<RemoteGatewayInfo?> gateway() async => gw;
 }
 
 class FakeLauncher implements RdpLauncher {

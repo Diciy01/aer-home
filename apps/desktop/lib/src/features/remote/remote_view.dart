@@ -7,6 +7,10 @@ import 'package:flutter/material.dart';
 import '../../core_api/remote_api.dart';
 import '../../remote/files_client.dart';
 import '../../remote/remote_desktop_view.dart';
+import 'gateway_views.dart';
+
+import 'package:aer_remote/aer_remote.dart' show InteractiveRemoteViewer;
+
 import '../../state/remote_controller.dart';
 import '../../theme/tokens.dart';
 import '../monitoring/mon_widgets.dart';
@@ -39,8 +43,9 @@ class _RemoteViewState extends State<RemoteView> {
       listenable: widget.remote,
       builder: (context, _) {
         final r = widget.remote;
+        final gw = r.gateway;
         return DefaultTabController(
-          length: 2,
+          length: gw == null ? 3 : 4,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -76,13 +81,16 @@ class _RemoteViewState extends State<RemoteView> {
                   ),
                   child: ActiveSessionPanel(remote: r, active: a),
                 ),
-              const TabBar(
+              TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
                 padding: EdgeInsets.symmetric(horizontal: AerSpacing.m),
                 tabs: [
                   Tab(key: Key('remote-tab-hosts'), text: 'Компьютеры'),
                   Tab(key: Key('remote-tab-history'), text: 'История сеансов'),
+                  Tab(key: Key('remote-tab-clients'), text: 'Клиенты'),
+                  if (gw != null)
+                    Tab(key: Key('remote-tab-gateway'), text: 'Через Gateway'),
                 ],
               ),
               Expanded(
@@ -90,6 +98,8 @@ class _RemoteViewState extends State<RemoteView> {
                   children: [
                     _Hosts(r: r),
                     _History(r: r),
+                    RemoteClientsTab(r: r),
+                    if (gw != null) GatewayTab(r: r, g: gw),
                   ],
                 ),
               ),
@@ -285,44 +295,81 @@ class RemoteDesktopPage extends StatelessWidget {
   final RemoteController remote;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => RemoteDesktopScreen(
     listenable: remote,
-    builder: (context, _) {
+    title: () => remote.active?.host.name ?? 'Удалённый рабочий стол',
+    viewer: () => remote.active?.viewer,
+    status: () {
       final a = remote.active;
-      final v = a?.viewer;
+      if (a == null) return '';
+      return '${a.session?.state.label ?? ''}'
+          '${a.session?.allowed.clipboard ?? false ? ' · буфер обмена' : ' · буфер выключен'}';
+    },
+    live: () => remote.active?.live ?? false,
+    message: () => remote.active?.message ?? '',
+    onReconnect: remote.reconnect,
+    onEnd: remote.end,
+  );
+}
+
+/// Full-window remote desktop for any route (LAN direct or via Gateway).
+/// Back keeps the session; «Завершить» ends it.
+class RemoteDesktopScreen extends StatelessWidget {
+  const RemoteDesktopScreen({
+    super.key,
+    required this.listenable,
+    required this.title,
+    required this.viewer,
+    required this.status,
+    required this.live,
+    required this.message,
+    required this.onReconnect,
+    required this.onEnd,
+  });
+
+  final Listenable listenable;
+  final String Function() title;
+  final InteractiveRemoteViewer? Function() viewer;
+  final String Function() status;
+  final bool Function() live;
+  final String Function() message;
+  final Future<void> Function() onReconnect;
+  final Future<void> Function() onEnd;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: listenable,
+    builder: (context, _) {
+      final v = viewer();
       return Scaffold(
         key: const Key('remote-desktop-page'),
         backgroundColor: Colors.black,
         appBar: AppBar(
-          title: Text(a == null ? 'Удалённый рабочий стол' : a.host.name),
+          title: Text(title()),
           leading: IconButton(
             tooltip: 'Свернуть (сеанс продолжается)',
             icon: const Icon(Icons.arrow_back_rounded),
             onPressed: () => Navigator.pop(context),
           ),
           actions: [
-            if (a != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: Center(
-                  child: Text(
-                    '${a.session?.state.label ?? ''}'
-                    '${a.session?.allowed.clipboard ?? false ? ' · буфер обмена' : ' · буфер выключен'}',
-                  ),
-                ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Center(
+                child: Text(status(), key: const Key('remote-desktop-status')),
               ),
-            if (a != null && a.live)
+            ),
+            if (live())
               IconButton(
                 key: const Key('remote-desktop-reconnect'),
                 tooltip: 'Переподключиться',
-                onPressed: remote.reconnect,
+                onPressed: onReconnect,
                 icon: const Icon(Icons.refresh_rounded),
               ),
-            if (a != null && a.live)
+            if (live())
               TextButton.icon(
                 key: const Key('remote-desktop-end'),
                 onPressed: () async {
-                  await remote.end();
+                  await onEnd();
                   if (context.mounted) Navigator.pop(context);
                 },
                 icon: const Icon(Icons.call_end_rounded),
@@ -333,9 +380,8 @@ class RemoteDesktopPage extends StatelessWidget {
         body: v == null
             ? Center(
                 child: Text(
-                  a?.message.isNotEmpty ?? false
-                      ? a!.message
-                      : 'Сеанс не показывается',
+                  message().isNotEmpty ? message() : 'Сеанс не показывается',
+                  key: const Key('remote-desktop-message'),
                   style: const TextStyle(color: Colors.white),
                 ),
               )
@@ -679,7 +725,7 @@ class ActiveSessionPanel extends StatelessWidget {
             ),
             if (a.files case final f?
                 when a.live && a.phase != RemotePhase.waitingHost)
-              _FilesPanel(files: f, maxBytes: 0),
+              RemoteFilesPanel(files: f, maxBytes: 0),
           ],
         ),
       ),
@@ -687,16 +733,16 @@ class ActiveSessionPanel extends StatelessWidget {
   }
 }
 
-class _FilesPanel extends StatefulWidget {
-  const _FilesPanel({required this.files, required this.maxBytes});
+class RemoteFilesPanel extends StatefulWidget {
+  const RemoteFilesPanel({super.key, required this.files, required this.maxBytes});
   final RemoteFilesClient files;
   final int maxBytes;
 
   @override
-  State<_FilesPanel> createState() => _FilesPanelState();
+  State<RemoteFilesPanel> createState() => RemoteFilesPanelState();
 }
 
-class _FilesPanelState extends State<_FilesPanel> {
+class RemoteFilesPanelState extends State<RemoteFilesPanel> {
   List<RemoteFile> _list = const [];
   String _status = '';
   double? _progress;
