@@ -1,0 +1,82 @@
+{
+ "data": [
+  {
+   "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+   "name": "ПК со Sunshine (стенд)",
+   "type": "computer",
+   "declaredCapabilities": [
+    "power.reboot",
+    "power.shutdown"
+   ],
+   "state": "online",
+   "stateReason": "Мониторинг: устройство на связи",
+   "currentOs": "",
+   "lastContactAt": "2026-10-28T11:32:25.422Z",
+   "monitoringStatus": "online",
+   "wol": null,
+   "sameMachineAsCore": false,
+   "sameMachineNote": "",
+   "agents": [],
+   "policy": {
+    "enabled": true,
+    "wake": true,
+    "shutdown": true,
+    "reboot": true,
+    "suspend": true,
+    "switchOs": false,
+    "allowWithBitLocker": false,
+    "revision": 0
+   },
+   "actions": [
+    {
+     "id": "wake",
+     "label": "Включить",
+     "available": false,
+     "reason": "В Registry у устройства нет возможности «power.wake»",
+     "dangerous": false
+    },
+    {
+     "id": "shutdown",
+     "label": "Выключить",
+     "available": false,
+     "reason": "Агент питания (aer-power-host) не на связи",
+     "dangerous": true
+    },
+    {
+     "id": "reboot",
+     "label": "Перезагрузить",
+     "available": false,
+     "reason": "Агент питания (aer-power-host) не на связи",
+     "dangerous": true
+    },
+    {
+     "id": "suspend",
+     "label": "Перевести в сон",
+     "available": false,
+     "reason": "В Registry у устройства нет возможности «power.suspend»",
+     "dangerous": true
+    },
+    {
+     "id": "switch_os",
+     "label": "Сменить ОС",
+     "available": false,
+     "reason": "В Registry у устройства нет возможности «power.switch_os»",
+     "dangerous": true
+    },
+    {
+     "id": "check",
+     "label": "Проверить состояние",
+     "available": true,
+     "reason": "",
+     "dangerous": false
+    }
+   ],
+   "activeJob": null,
+   "lastJob": null
+  }
+ ],
+ "meta": {
+  "requestId": "e36ba844dd779cc4d11f17dd",
+  "apiVersion": "v1"
+ }
+}

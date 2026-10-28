@@ -1,0 +1,101 @@
+{
+ "data": [
+  {
+   "entityId": "0124d5a4-ecf9-4fbc-b5fe-6e9c45c729d7",
+   "name": "Коммутатор (стенд)",
+   "type": "network_device",
+   "status": "online",
+   "reason": "Отвечает на TCP-порт 52565",
+   "checkKind": "tcp",
+   "lastContactAt": "2026-10-28T11:32:25.422Z",
+   "lastCheckAt": "2026-10-28T11:32:25.424Z",
+   "changedAt": "2026-10-28T11:32:15.427Z",
+   "keyMetrics": [
+    {
+     "metric": "net.latency",
+     "label": "",
+     "value": 0.221,
+     "unit": "ms",
+     "at": "2026-10-28T11:32:25.424Z",
+     "source": "probe:tcp",
+     "quality": "ok",
+     "reason": ""
+    }
+   ],
+   "openIncidents": 0,
+   "worstSeverity": null,
+   "agents": []
+  },
+  {
+   "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+   "name": "ПК со Sunshine (стенд)",
+   "type": "computer",
+   "status": "online",
+   "reason": "Отвечает на TCP-порт 36067",
+   "checkKind": "tcp",
+   "lastContactAt": "2026-10-28T11:32:25.422Z",
+   "lastCheckAt": "2026-10-28T11:32:25.423Z",
+   "changedAt": "2026-10-28T11:32:15.427Z",
+   "keyMetrics": [
+    {
+     "metric": "net.latency",
+     "label": "",
+     "value": 0.208,
+     "unit": "ms",
+     "at": "2026-10-28T11:32:25.424Z",
+     "source": "probe:tcp",
+     "quality": "ok",
+     "reason": ""
+    }
+   ],
+   "openIncidents": 0,
+   "worstSeverity": null,
+   "agents": []
+  },
+  {
+   "entityId": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+   "name": "Роутер (стенд)",
+   "type": "router",
+   "status": "online",
+   "reason": "Отвечает на TCP-порт 58135",
+   "checkKind": "tcp",
+   "lastContactAt": "2026-10-28T11:32:25.422Z",
+   "lastCheckAt": "2026-10-28T11:32:25.422Z",
+   "changedAt": "2026-10-28T11:32:15.425Z",
+   "keyMetrics": [
+    {
+     "metric": "net.latency",
+     "label": "",
+     "value": 0.241,
+     "unit": "ms",
+     "at": "2026-10-28T11:32:25.423Z",
+     "source": "probe:tcp",
+     "quality": "ok",
+     "reason": ""
+    }
+   ],
+   "openIncidents": 0,
+   "worstSeverity": null,
+   "agents": []
+  },
+  {
+   "entityId": "2f744c88-5980-4d6d-bcad-2eecd1c7c1c9",
+   "name": "ТВ-приставка (стенд)",
+   "type": "television",
+   "status": "unknown",
+   "reason": "Нет адреса и агента: проверять нечем",
+   "checkKind": "none",
+   "lastContactAt": null,
+   "lastCheckAt": "2026-10-28T11:32:25.421Z",
+   "changedAt": "2026-10-28T11:32:15.426Z",
+   "keyMetrics": [],
+   "openIncidents": 0,
+   "worstSeverity": null,
+   "agents": []
+  }
+ ],
+ "meta": {
+  "requestId": "aaf9b712d06bfd7af4a01aa0",
+  "apiVersion": "v1"
+ }
+}

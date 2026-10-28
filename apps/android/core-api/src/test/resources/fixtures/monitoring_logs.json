@@ -1,0 +1,44 @@
+{
+ "data": {
+  "items": [
+   {
+    "id": 5,
+    "at": "2026-10-28T11:32:15.426Z",
+    "entityId": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+    "source": "net.router_wan",
+    "level": "info",
+    "message": "Роутер «Роутер (стенд)» (WAN): WAN подключён (по данным роутера, UPnP)",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   },
+   {
+    "id": 4,
+    "at": "2026-10-28T11:32:15.425Z",
+    "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+    "source": "net.sunshine",
+    "level": "info",
+    "message": "Sunshine (стенд): Sunshine работает, стрима нет",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   },
+   {
+    "id": 3,
+    "at": "2026-10-28T11:32:15.424Z",
+    "entityId": null,
+    "source": "net.internet",
+    "level": "info",
+    "message": "Интернет: Интернет доступен: ответили 2 из 2 целей",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   }
+  ],
+  "nextBefore": 3
+ },
+ "meta": {
+  "requestId": "78b0340fb24fdc77886efab5",
+  "apiVersion": "v1"
+ }
+}

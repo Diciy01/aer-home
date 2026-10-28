@@ -1,0 +1,103 @@
+{
+ "data": {
+  "items": [
+   {
+    "id": "0124d5a4-ecf9-4fbc-b5fe-6e9c45c729d7",
+    "name": "Коммутатор (стенд)",
+    "type": "network_device",
+    "description": "",
+    "icon": "network",
+    "tags": [],
+    "parentId": null,
+    "discovery": "manual",
+    "address": "127.0.0.1:52565",
+    "secretRefs": [],
+    "attributes": {},
+    "capabilities": [
+     "network.ping"
+    ],
+    "revision": 1,
+    "createdAt": "2026-10-28T11:32:15.383724735Z",
+    "updatedAt": "2026-10-28T11:32:15.383724735Z",
+    "archived": false,
+    "archivedAt": null
+   },
+   {
+    "id": "e868be9e-7758-45ab-b7da-b23344772aad",
+    "name": "ПК со Sunshine (стенд)",
+    "type": "computer",
+    "description": "",
+    "icon": "computer",
+    "tags": [],
+    "parentId": null,
+    "discovery": "manual",
+    "address": "127.0.0.1:36067",
+    "secretRefs": [],
+    "attributes": {},
+    "capabilities": [
+     "files.transfer",
+     "monitoring.logs",
+     "monitoring.metrics",
+     "network.ping",
+     "power.reboot",
+     "power.shutdown",
+     "remote.desktop"
+    ],
+    "revision": 1,
+    "createdAt": "2026-10-28T11:32:15.387553512Z",
+    "updatedAt": "2026-10-28T11:32:15.387553512Z",
+    "archived": false,
+    "archivedAt": null
+   },
+   {
+    "id": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+    "name": "Роутер (стенд)",
+    "type": "router",
+    "description": "",
+    "icon": "router",
+    "tags": [],
+    "parentId": null,
+    "discovery": "manual",
+    "address": "127.0.0.1:58135",
+    "secretRefs": [],
+    "attributes": {},
+    "capabilities": [
+     "network.ping"
+    ],
+    "revision": 1,
+    "createdAt": "2026-10-28T11:32:15.381299347Z",
+    "updatedAt": "2026-10-28T11:32:15.381299347Z",
+    "archived": false,
+    "archivedAt": null
+   },
+   {
+    "id": "2f744c88-5980-4d6d-bcad-2eecd1c7c1c9",
+    "name": "ТВ-приставка (стенд)",
+    "type": "television",
+    "description": "",
+    "icon": "tv",
+    "tags": [],
+    "parentId": null,
+    "discovery": "manual",
+    "address": null,
+    "secretRefs": [],
+    "attributes": {},
+    "capabilities": [
+     "network.ping"
+    ],
+    "revision": 1,
+    "createdAt": "2026-10-28T11:32:15.385657604Z",
+    "updatedAt": "2026-10-28T11:32:15.385657604Z",
+    "archived": false,
+    "archivedAt": null
+   }
+  ],
+  "total": 4,
+  "limit": 50,
+  "offset": 0
+ },
+ "meta": {
+  "requestId": "18b012818684bba397c8417d",
+  "apiVersion": "v1"
+ }
+}

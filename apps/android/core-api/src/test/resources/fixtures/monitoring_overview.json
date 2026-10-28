@@ -1,0 +1,51 @@
+{
+ "data": {
+  "generatedAt": "2026-10-28T11:32:35.082474035Z",
+  "devices": 4,
+  "byStatus": {
+   "degraded": 0,
+   "offline": 0,
+   "online": 3,
+   "unknown": 1,
+   "unsupported": 0
+  },
+  "openIncidents": 0,
+  "criticalOpen": 0,
+  "unreadNotifications": 0,
+  "integrations": [
+   {
+    "id": "checks",
+    "label": "Проверки доступности",
+    "status": "ok",
+    "reason": "4 объектов, каждые 10 с",
+    "checkedAt": "2026-10-28T11:32:25.425372976Z"
+   },
+   {
+    "id": "docker",
+    "label": "Docker",
+    "status": "disabled",
+    "reason": "Выключено в конфигурации",
+    "checkedAt": "2026-10-28T11:32:15.416889289Z"
+   },
+   {
+    "id": "telegram",
+    "label": "Уведомления в Telegram",
+    "status": "disabled",
+    "reason": "Выключено: включите monitoring.telegram в конфигурации Core (нужны файл с токеном бота и chatId)",
+    "checkedAt": "2026-10-28T11:32:15.416896669Z"
+   },
+   {
+    "id": "bots",
+    "label": "Управление ботами",
+    "status": "disabled",
+    "reason": "Нет управляющих адаптеров в конфигурации Core: доступен только мониторинг",
+    "checkedAt": "2026-10-28T11:32:15.416836748Z"
+   }
+  ],
+  "recentEvents": []
+ },
+ "meta": {
+  "requestId": "cb4092afc9647089cf3c72de",
+  "apiVersion": "v1"
+ }
+}

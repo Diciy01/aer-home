@@ -1,0 +1,219 @@
+{
+ "data": {
+  "summary": {
+   "level": "ok",
+   "title": "Сеть в порядке",
+   "issues": []
+  },
+  "internet": {
+   "key": "internet",
+   "kind": "internet",
+   "name": "Интернет",
+   "entityId": "",
+   "status": "up",
+   "reason": "Интернет доступен: ответили 2 из 2 целей",
+   "latencyMs": 0.204,
+   "lastCheckAt": "2026-10-28T11:32:25.428Z",
+   "lastOkAt": "2026-10-28T11:32:25.428Z",
+   "changedAt": "2026-10-28T11:32:15.423Z",
+   "failures": 0,
+   "stale": false,
+   "details": {
+    "targets": [
+     {
+      "target": "127.0.0.1:34569",
+      "ok": true,
+      "latencyMs": 0.285,
+      "error": ""
+     },
+     {
+      "target": "127.0.0.1:34409",
+      "ok": true,
+      "latencyMs": 0.204,
+      "error": ""
+     }
+    ]
+   }
+  },
+  "routers": [
+   {
+    "device": {
+     "entityId": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+     "name": "Роутер (стенд)",
+     "type": "router",
+     "address": "127.0.0.1:58135",
+     "status": "up",
+     "reason": "Отвечает на TCP-порт 58135",
+     "monitoringStatus": "online",
+     "latencyMs": 0.241,
+     "latencyAt": "2026-10-28T11:32:25.423Z",
+     "lastContactAt": "2026-10-28T11:32:25.422Z",
+     "lastCheckAt": "2026-10-28T11:32:25.422Z",
+     "changedAt": "2026-10-28T11:32:15.425Z",
+     "stale": false,
+     "openIncidents": 0
+    },
+    "adapter": "upnp",
+    "adapterNote": "UPnP IGD: только чтение состояния WAN",
+    "wan": {
+     "key": "router:1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+     "kind": "router_wan",
+     "name": "Роутер «Роутер (стенд)» (WAN)",
+     "entityId": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+     "status": "up",
+     "reason": "WAN подключён (по данным роутера, UPnP)",
+     "latencyMs": 1.368,
+     "lastCheckAt": "2026-10-28T11:32:25.434Z",
+     "lastOkAt": "2026-10-28T11:32:25.434Z",
+     "changedAt": "2026-10-28T11:32:15.425Z",
+     "failures": 0,
+     "stale": false,
+     "details": {
+      "connection": "Connected",
+      "physicalLink": "Up",
+      "uptimeSec": 86400,
+      "downMbps": 500,
+      "upMbps": 100
+     }
+    }
+   }
+  ],
+  "devices": [
+   {
+    "entityId": "0124d5a4-ecf9-4fbc-b5fe-6e9c45c729d7",
+    "name": "Коммутатор (стенд)",
+    "type": "network_device",
+    "address": "127.0.0.1:52565",
+    "status": "up",
+    "reason": "Отвечает на TCP-порт 52565",
+    "monitoringStatus": "online",
+    "latencyMs": 0.221,
+    "latencyAt": "2026-10-28T11:32:25.424Z",
+    "lastContactAt": "2026-10-28T11:32:25.422Z",
+    "lastCheckAt": "2026-10-28T11:32:25.424Z",
+    "changedAt": "2026-10-28T11:32:15.427Z",
+    "stale": false,
+    "openIncidents": 0
+   }
+  ],
+  "tvs": [
+   {
+    "entityId": "2f744c88-5980-4d6d-bcad-2eecd1c7c1c9",
+    "name": "ТВ-приставка (стенд)",
+    "type": "television",
+    "address": "",
+    "status": "unconfigured",
+    "reason": "Нет адреса и агента: проверять нечем",
+    "monitoringStatus": "unknown",
+    "latencyMs": null,
+    "latencyAt": null,
+    "lastContactAt": null,
+    "lastCheckAt": "2026-10-28T11:32:25.421Z",
+    "changedAt": "2026-10-28T11:32:15.426Z",
+    "stale": false,
+    "openIncidents": 0
+   }
+  ],
+  "sunshine": [
+   {
+    "id": "lab",
+    "name": "Sunshine (стенд)",
+    "webUrl": "https://127.0.0.1:36067",
+    "check": {
+     "key": "sunshine:lab",
+     "kind": "sunshine",
+     "name": "Sunshine (стенд)",
+     "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+     "status": "up",
+     "reason": "Sunshine работает, стрима нет",
+     "latencyMs": 1.431,
+     "lastCheckAt": "2026-10-28T11:32:25.429Z",
+     "lastOkAt": "2026-10-28T11:32:25.429Z",
+     "changedAt": "2026-10-28T11:32:15.424Z",
+     "failures": 0,
+     "stale": false,
+     "details": {
+      "streaming": false,
+      "version": "0.0.0-lab",
+      "currentApp": 0,
+      "webReachable": true
+     }
+    },
+    "entity": {
+     "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+     "name": "ПК со Sunshine (стенд)",
+     "type": "computer",
+     "address": "127.0.0.1:36067",
+     "status": "up",
+     "reason": "Отвечает на TCP-порт 36067",
+     "monitoringStatus": "online",
+     "latencyMs": 0.208,
+     "latencyAt": "2026-10-28T11:32:25.424Z",
+     "lastContactAt": "2026-10-28T11:32:25.422Z",
+     "lastCheckAt": "2026-10-28T11:32:25.423Z",
+     "changedAt": "2026-10-28T11:32:15.427Z",
+     "stale": false,
+     "openIncidents": 0
+    },
+    "tv": {
+     "entityId": "2f744c88-5980-4d6d-bcad-2eecd1c7c1c9",
+     "name": "ТВ-приставка (стенд)",
+     "type": "television",
+     "address": "",
+     "status": "unconfigured",
+     "reason": "Нет адреса и агента: проверять нечем",
+     "monitoringStatus": "unknown",
+     "latencyMs": null,
+     "latencyAt": null,
+     "lastContactAt": null,
+     "lastCheckAt": "2026-10-28T11:32:25.421Z",
+     "changedAt": "2026-10-28T11:32:15.426Z",
+     "stale": false,
+     "openIncidents": 0
+    }
+   }
+  ],
+  "incidents": [],
+  "recent": [
+   {
+    "id": 5,
+    "at": "2026-10-28T11:32:15.426Z",
+    "entityId": "1c5849f6-c5ca-459c-b8ce-039658dc5f1c",
+    "source": "net.router_wan",
+    "level": "info",
+    "message": "Роутер «Роутер (стенд)» (WAN): WAN подключён (по данным роутера, UPnP)",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   },
+   {
+    "id": 4,
+    "at": "2026-10-28T11:32:15.425Z",
+    "entityId": "e868be9e-7758-45ab-b7da-b23344772aad",
+    "source": "net.sunshine",
+    "level": "info",
+    "message": "Sunshine (стенд): Sunshine работает, стрима нет",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   },
+   {
+    "id": 3,
+    "at": "2026-10-28T11:32:15.424Z",
+    "entityId": null,
+    "source": "net.internet",
+    "level": "info",
+    "message": "Интернет: Интернет доступен: ответили 2 из 2 целей",
+    "correlationId": "",
+    "fields": null,
+    "incidentId": null
+   }
+  ],
+  "intervalSec": 10,
+  "generatedAt": "2026-10-28T11:32:35.106806083Z"
+ },
+ "meta": {
+  "requestId": "42041d4c4b5e787e98f7dad0",
+  "apiVersion": "v1"
+ }
+}

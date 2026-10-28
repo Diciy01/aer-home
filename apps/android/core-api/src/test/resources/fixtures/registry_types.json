@@ -1,0 +1,209 @@
+{
+ "data": [
+  {
+   "id": "computer",
+   "label": "Компьютер",
+   "description": "Настольный ПК или ноутбук",
+   "group": "hardware",
+   "icon": "computer",
+   "addressMode": "optional",
+   "addressHint": "IP или имя хоста в LAN",
+   "defaultCapabilities": [
+    "monitoring.metrics",
+    "monitoring.logs",
+    "network.ping",
+    "remote.desktop",
+    "files.transfer",
+    "power.shutdown",
+    "power.reboot"
+   ]
+  },
+  {
+   "id": "mobile_device",
+   "label": "Мобильное устройство",
+   "description": "Телефон или планшет",
+   "group": "hardware",
+   "icon": "phone",
+   "addressMode": "optional",
+   "defaultCapabilities": [
+    "network.ping"
+   ]
+  },
+  {
+   "id": "server",
+   "label": "Сервер",
+   "description": "Постоянно работающий домашний сервер",
+   "group": "hardware",
+   "icon": "server",
+   "addressMode": "optional",
+   "addressHint": "IP или имя хоста в LAN",
+   "defaultCapabilities": [
+    "monitoring.metrics",
+    "monitoring.logs",
+    "network.ping",
+    "remote.terminal",
+    "power.shutdown",
+    "power.reboot"
+   ]
+  },
+  {
+   "id": "storage",
+   "label": "Хранилище",
+   "description": "Диск, массив или сетевое хранилище",
+   "group": "hardware",
+   "icon": "storage",
+   "addressMode": "optional",
+   "defaultCapabilities": [
+    "monitoring.metrics"
+   ]
+  },
+  {
+   "id": "television",
+   "label": "Телевизор",
+   "description": "ТВ или ТВ-приставка",
+   "group": "hardware",
+   "icon": "tv",
+   "addressMode": "optional",
+   "addressHint": "IP в LAN",
+   "defaultCapabilities": [
+    "network.ping"
+   ]
+  },
+  {
+   "id": "network_device",
+   "label": "Сетевое устройство",
+   "description": "Коммутатор, точка доступа, VPN-шлюз",
+   "group": "network",
+   "icon": "network",
+   "addressMode": "optional",
+   "defaultCapabilities": [
+    "network.ping"
+   ]
+  },
+  {
+   "id": "router",
+   "label": "Роутер",
+   "description": "Домашний маршрутизатор",
+   "group": "network",
+   "icon": "router",
+   "addressMode": "optional",
+   "addressHint": "Адрес шлюза, например 192.0.2.1",
+   "defaultCapabilities": [
+    "network.ping"
+   ]
+  },
+  {
+   "id": "website",
+   "label": "Сайт",
+   "description": "Веб-сайт или HTTP-сервис",
+   "group": "network",
+   "icon": "web",
+   "addressMode": "required",
+   "addressHint": "URL, например https://example.org",
+   "defaultCapabilities": [
+    "monitoring.http"
+   ]
+  },
+  {
+   "id": "application",
+   "label": "Приложение",
+   "description": "Программа на компьютере",
+   "group": "software",
+   "icon": "app",
+   "addressMode": "none",
+   "defaultCapabilities": []
+  },
+  {
+   "id": "automation",
+   "label": "Автоматизация",
+   "description": "n8n, cron, сценарий",
+   "group": "software",
+   "icon": "automation",
+   "addressMode": "optional",
+   "defaultCapabilities": [
+    "automation.runs"
+   ]
+  },
+  {
+   "id": "database",
+   "label": "База данных",
+   "description": "PostgreSQL, SQLite, MySQL и др.",
+   "group": "software",
+   "icon": "database",
+   "addressMode": "optional",
+   "addressHint": "host:port без пароля",
+   "defaultCapabilities": [
+    "database.check"
+   ]
+  },
+  {
+   "id": "docker_container",
+   "label": "Docker-контейнер",
+   "description": "Контейнер на хосте Docker",
+   "group": "software",
+   "icon": "container",
+   "addressMode": "none",
+   "defaultCapabilities": [
+    "monitoring.metrics",
+    "monitoring.logs"
+   ]
+  },
+  {
+   "id": "process",
+   "label": "Процесс",
+   "description": "Фоновый процесс или скрипт",
+   "group": "software",
+   "icon": "process",
+   "addressMode": "none",
+   "defaultCapabilities": [
+    "monitoring.heartbeat"
+   ]
+  },
+  {
+   "id": "service",
+   "label": "Служба",
+   "description": "Системная служба или сервис",
+   "group": "software",
+   "icon": "service",
+   "addressMode": "optional",
+   "defaultCapabilities": [
+    "monitoring.logs"
+   ]
+  },
+  {
+   "id": "telegram_bot",
+   "label": "Telegram-бот",
+   "description": "Бот на Python или другом стеке",
+   "group": "software",
+   "icon": "bot",
+   "addressMode": "none",
+   "defaultCapabilities": [
+    "monitoring.heartbeat",
+    "monitoring.logs",
+    "bot.tasks"
+   ]
+  },
+  {
+   "id": "custom",
+   "label": "Другое",
+   "description": "Произвольный объект",
+   "group": "virtual",
+   "icon": "custom",
+   "addressMode": "optional",
+   "defaultCapabilities": []
+  },
+  {
+   "id": "virtual_object",
+   "label": "Виртуальный объект",
+   "description": "Логическая группа или понятие без железа",
+   "group": "virtual",
+   "icon": "virtual",
+   "addressMode": "none",
+   "defaultCapabilities": []
+  }
+ ],
+ "meta": {
+  "requestId": "304f8b2776d91393ef1300e2",
+  "apiVersion": "v1"
+ }
+}

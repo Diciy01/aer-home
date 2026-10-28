@@ -1,0 +1,80 @@
+{
+ "data": {
+  "coreVersion": "0.1.0-dev",
+  "apiVersion": "v1",
+  "mode": "development",
+  "demo": true,
+  "instanceId": "18cd67dc-5dc9-495a-bbef-56465f6c30ee",
+  "instanceCreatedAt": "2026-10-28T11:32:15Z",
+  "startedAt": "2026-10-28T11:32:15.414333548Z",
+  "uptimeSeconds": 19,
+  "schema": [
+   {
+    "module": "bots",
+    "version": 1
+   },
+   {
+    "module": "foundation",
+    "version": 1
+   },
+   {
+    "module": "monitoring",
+    "version": 2
+   },
+   {
+    "module": "network",
+    "version": 1
+   },
+   {
+    "module": "power",
+    "version": 1
+   },
+   {
+    "module": "registry",
+    "version": 1
+   },
+   {
+    "module": "remote",
+    "version": 1
+   },
+   {
+    "module": "scene",
+    "version": 1
+   }
+  ],
+  "modules": [
+   {
+    "name": "registry",
+    "enabled": true
+   },
+   {
+    "name": "scene",
+    "enabled": true
+   },
+   {
+    "name": "monitoring",
+    "enabled": true
+   },
+   {
+    "name": "bots",
+    "enabled": true
+   },
+   {
+    "name": "remote",
+    "enabled": true
+   },
+   {
+    "name": "power",
+    "enabled": true
+   },
+   {
+    "name": "network",
+    "enabled": true
+   }
+  ]
+ },
+ "meta": {
+  "requestId": "36cb307f4d99d110ec1e7ac0",
+  "apiVersion": "v1"
+ }
+}
