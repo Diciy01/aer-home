@@ -1,0 +1,193 @@
+// Command aer-remotelab is an ISOLATED test stand of AER Remote 2 (M14):
+// an in-process Core in a temporary data dir, the Remote Gateway on
+// 127.0.0.1 with a fresh self-signed certificate, and one host agent with
+// a FAKE grdctl and a FAKE "RDP server" (greets "HOST <name>" and echoes).
+// Nothing listens beyond loopback; no real RDP server, router or computer
+// is touched. Clients (the Dart engine tests, AER Connect in development)
+// pair with the printed code.
+//
+//	aer-remotelab            # prints one JSON line, runs until stdin closes or SIGTERM
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"syscall"
+	"time"
+
+	"aerhome/core/internal/core"
+	"aerhome/core/internal/foundation/config"
+	"aerhome/core/internal/modules"
+	"aerhome/core/internal/remotegw"
+	"aerhome/core/internal/remotehost"
+)
+
+// TEST DATA: every computer, client and credential here is generated.
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, "aer-remotelab:", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	dir, err := os.MkdirTemp("", "aer-remotelab-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() { _, _ = io.Copy(io.Discard, os.Stdin); stop() }()
+	quiet := slog.New(slog.DiscardHandler)
+
+	cfg := config.Default(func(string) (string, bool) { return "", false })
+	cfg.DataDir = filepath.Join(dir, "core")
+	cfg.Monitoring.Docker.Enabled = false
+	c, err := core.New(ctx, core.Options{Config: cfg, Logger: quiet, Modules: modules.All()})
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	cln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	go func() { _ = http.Serve(cln, c.Handler()) }()
+	coreURL := "http://" + cln.Addr().String()
+	raw, _ := os.ReadFile(cfg.TokenPath())
+	owner := strings.TrimSpace(string(raw))
+	api := func(method, path, body string, out any) error {
+		req, _ := http.NewRequest(method, coreURL+"/api/v1"+path, strings.NewReader(body))
+		req.Header.Set("Authorization", "Bearer "+owner)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return err
+		}
+		defer res.Body.Close()
+		var env struct{ Data json.RawMessage }
+		if err := json.NewDecoder(res.Body).Decode(&env); err != nil || res.StatusCode >= 300 {
+			return fmt.Errorf("%s %s: %d", method, path, res.StatusCode)
+		}
+		if out != nil {
+			return json.Unmarshal(env.Data, out)
+		}
+		return nil
+	}
+
+	var server, pc struct{ ID string }
+	var gwCred, hostCred struct{ Token string }
+	steps := []error{
+		api("POST", "/registry/entities", `{"name":"Сервер (стенд)","type":"server"}`, &server),
+		api("POST", "/registry/entities", `{"name":"Домашний ПК (стенд)","type":"computer"}`, &pc),
+	}
+	steps = append(steps,
+		api("POST", "/monitoring/agents", `{"entityId":"`+server.ID+`","name":"gateway","kind":"gateway"}`, &gwCred),
+		api("POST", "/monitoring/agents", `{"entityId":"`+pc.ID+`","name":"remote","kind":"remote"}`, &hostCred),
+		api("PUT", "/remote/hosts/"+pc.ID+"/policy", `{"enabled":true,"desktop":true,"clipboard":true,"files":true,"maxMinutes":30}`, nil))
+	for _, e := range steps {
+		if e != nil {
+			return e
+		}
+	}
+	gwTok, hostTok := filepath.Join(dir, "gw.token"), filepath.Join(dir, "host.token")
+	_ = os.WriteFile(gwTok, []byte(gwCred.Token), 0o600)
+	_ = os.WriteFile(hostTok, []byte(hostCred.Token), 0o600)
+
+	gcfg := remotegw.Default()
+	gcfg.ListenAddr, gcfg.CoreURL, gcfg.TokenFile, gcfg.StateDir = "127.0.0.1:0", coreURL, gwTok, filepath.Join(dir, "gw")
+	gcfg.AliveCheckSec, gcfg.PairWaitSec = 1, 5
+	g, err := remotegw.New(gcfg, quiet)
+	if err != nil {
+		return err
+	}
+	srv, err := g.Server()
+	if err != nil {
+		return err
+	}
+	gln, err := net.Listen("tcp", gcfg.ListenAddr)
+	if err != nil {
+		return err
+	}
+	go func() { _ = srv.ServeTLS(gln, "", "") }()
+	go g.Maintain(ctx)
+	gwURL := "https://" + gln.Addr().String()
+	fp, _ := g.Fingerprint()
+
+	rdp, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+	var live atomic.Int32
+	go func() {
+		for {
+			conn, err := rdp.Accept()
+			if err != nil {
+				return
+			}
+			live.Add(1)
+			go func() {
+				defer live.Add(-1)
+				defer conn.Close()
+				_, _ = io.WriteString(conn, "HOST Домашний ПК (стенд)\n")
+				_, _ = io.Copy(conn, conn)
+			}()
+		}
+	}()
+	fl, _ := net.Listen("tcp", "127.0.0.1:0")
+	filesPort := fl.Addr().(*net.TCPAddr).Port
+	fl.Close()
+	acfg := remotehost.Config{CoreURL: coreURL, TokenFile: hostTok, StateDir: filepath.Join(dir, "agent"), Backend: "gnome-rdp",
+		Grdctl: []string{"grdctl"}, Daemon: []string{"/bin/true"}, Address: "192.0.2.10", Port: rdp.Addr().(*net.TCPAddr).Port,
+		RDPUser: "aer", Approval: "auto", Clipboard: true,
+		Files:      remotehost.Files{Enabled: true, Dir: filepath.Join(dir, "exchange"), Port: filesPort, MaxBytes: 1 << 20},
+		GatewayURL: gwURL, GatewayCertSHA256: fp}
+	a, err := remotehost.New(acfg, quiet)
+	if err != nil {
+		return err
+	}
+	a.SetRunner(func(context.Context, []string) ([]byte, error) { return []byte("RDP:\n\tStatus: disabled\n"), nil },
+		func([]string) (func(), error) { return func() {}, nil })
+	a.Connections = func() int { return int(live.Load()) }
+	go func() { _ = a.Run(ctx) }()
+
+	var pair struct {
+		Code   string
+		Client struct{ ID string }
+	}
+	if err := api("POST", "/remote/clients", `{"name":"AER Connect (стенд)","hosts":["`+pc.ID+`"],"clipboard":true,"files":true}`, &pair); err != nil {
+		return err
+	}
+	for i := 0; ; i++ { // wait until the host agent said hello
+		var h struct{ CanConnect bool }
+		if api("GET", "/remote/hosts/"+pc.ID, "", &h) == nil && h.CanConnect {
+			break
+		}
+		if i > 200 {
+			return fmt.Errorf("host agent not ready")
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	out, _ := json.Marshal(map[string]string{"gateway": gwURL, "fingerprint": fp, "pairingCode": pair.Code, "clientId": pair.Client.ID,
+		"hostId": pc.ID, "coreUrl": coreURL, "ownerToken": owner, "exchangeDir": acfg.Files.Dir})
+	w := bufio.NewWriter(os.Stdout)
+	_, _ = w.Write(append(out, '\n'))
+	_ = w.Flush()
+	<-ctx.Done()
+	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_ = srv.Shutdown(sctx)
+	return nil
+}

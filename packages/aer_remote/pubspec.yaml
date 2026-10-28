@@ -1,0 +1,14 @@
+name: aer_remote
+description: "AER Remote Engine for Dart clients (AER HOME, AER Connect): Gateway API, pinned TLS, aer-tunnel/1 legs, local forwarder, session lifecycle. No UI (ADR-017)."
+version: 0.1.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  crypto: ^3.0.7
+
+dev_dependencies:
+  lints: ^6.1.0
+  test: ^1.31.1
