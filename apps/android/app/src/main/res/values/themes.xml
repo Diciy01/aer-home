@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window background before Compose draws: Cozy Beige background token. -->
+    <style name="Theme.AerHome" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/aer_background</item>
+        <item name="android:statusBarColor">@color/aer_background</item>
+        <item name="android:navigationBarColor">@color/aer_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

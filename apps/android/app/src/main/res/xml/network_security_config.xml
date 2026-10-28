@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Core has no TLS of its own and lives in the home LAN or a Tailscale tailnet
+     (docs/SECURITY.md), so plain http must be possible. Android cannot limit
+     cleartext to IP ranges; the app itself refuses http to public addresses
+     (core-api Endpoint.kt) and warns for LAN addresses. Only system CAs. -->
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <!-- Deliberate (see above); reviewed in M12, docs/ANDROID.md «Безопасность». -->
+    <base-config cleartextTrafficPermitted="true" tools:ignore="InsecureBaseConfiguration">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

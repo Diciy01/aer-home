@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A small isometric house in the Cozy Beige palette (108dp adaptive canvas). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#FFE8CFB4" android:pathData="M54,34 L78,46 L54,58 L30,46 Z" />
+    <path android:fillColor="#FFD9B58C" android:pathData="M30,46 L54,58 L54,78 L30,66 Z" />
+    <path android:fillColor="#FFA77E5F" android:pathData="M54,58 L78,46 L78,66 L54,78 Z" />
+    <path android:fillColor="#FF718E76" android:pathData="M60,62 L68,58 L68,68 L60,72 Z" />
+    <path android:fillColor="#FF40352E" android:pathData="M36,54 L44,58 L44,66 L36,62 Z" />
+</vector>
