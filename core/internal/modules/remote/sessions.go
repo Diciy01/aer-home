@@ -16,7 +16,7 @@ import (
 )
 
 const sessionCols = `id, entity_id, kind, source_name, source_entity, client_id, transport, state, reason, allowed,
-	created_at, approved_at, ready_at, granted_at, connected_at, ended_at, expires_at`
+	created_at, approved_at, ready_at, granted_at, connected_at, ended_at, expires_at, route`
 
 func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	var x Session
@@ -24,7 +24,7 @@ func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	var created, expires int64
 	var appr, ready, granted, conn, ended sql.NullInt64
 	if err := row.Scan(&x.ID, &x.EntityID, &x.Kind, &x.SourceName, &x.SourceEntity, &x.ClientID, &x.Transport, &st, &x.Reason, &allowed,
-		&created, &appr, &ready, &granted, &conn, &ended, &expires); err != nil {
+		&created, &appr, &ready, &granted, &conn, &ended, &expires, &x.Route); err != nil {
 		return x, err
 	}
 	x.State = State(st)
@@ -125,6 +125,12 @@ type NewSession struct {
 // Create starts a session: checks real readiness, policy and limits, then
 // asks the host agent to open it. One Idempotency-Key = one session.
 func (s *Service) Create(ctx context.Context, in NewSession, key string) (Session, error) {
+	return s.create(ctx, in, key, remoteengine.RouteDirect, Caps{Desktop: true, Input: true, Clipboard: true, Files: true, Apps: true})
+}
+
+// create is Create for a route; mask narrows the host's effective rights
+// (a remote client's own permissions on the relay route).
+func (s *Service) create(ctx context.Context, in NewSession, key, route string, mask Caps) (Session, error) {
 	if key != "" {
 		var id, entity string
 		err := s.db.QueryRowContext(ctx, `SELECT id, entity_id FROM remote_sessions WHERE idempotency_key = ?`, key).Scan(&id, &entity)
@@ -175,7 +181,7 @@ func (s *Service) Create(ctx context.Context, in NewSession, key string) (Sessio
 	if active >= s.cfg.MaxActiveSessions {
 		return Session{}, &RefusedError{Status: 409, Code: "CONFLICT", Reason: "limit", Message: fmt.Sprintf("Достигнут предел одновременных сеансов (%d)", s.cfg.MaxActiveSessions)}
 	}
-	allowed := h.Effective
+	allowed := h.Effective.And(mask)
 	if in.Clipboard != nil && !*in.Clipboard {
 		allowed.Clipboard = false
 	}
@@ -189,7 +195,7 @@ func (s *Service) Create(ctx context.Context, in NewSession, key string) (Sessio
 	minutes = min(minutes, h.Policy.MaxMinutes, s.cfg.MaxMinutes)
 	now := s.now().UTC().Truncate(time.Millisecond)
 	x := Session{ID: ids.New(), EntityID: in.EntityID, HostName: h.Name, Kind: in.Kind, SourceName: strings.TrimSpace(in.SourceName),
-		SourceEntity: in.SourceEntity, ClientID: in.ClientID, Transport: h.Agent.Transport, State: StatePending, Allowed: allowed,
+		SourceEntity: in.SourceEntity, ClientID: in.ClientID, Transport: h.Agent.Transport, Route: route, State: StatePending, Allowed: allowed,
 		CreatedAt: now, ExpiresAt: now.Add(time.Duration(minutes) * time.Minute)}
 	al, _ := json.Marshal(allowed)
 	var idem any
@@ -197,13 +203,13 @@ func (s *Service) Create(ctx context.Context, in NewSession, key string) (Sessio
 		idem = key
 	}
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO remote_sessions (id, entity_id, kind, source_name, source_entity, client_id, transport, state,
-		allowed, idempotency_key, created_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt)); err != nil {
+		allowed, idempotency_key, created_at, expires_at, route) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt), route); err != nil {
 		return Session{}, err
 	}
 	s.audit(ctx, x.ID, "created", fmt.Sprintf("Запрошен сеанс рабочего стола с «%s» на %d мин", or(x.SourceName, "неизвестного клиента"), minutes))
 	s.mon.RecordEvent(ctx, x.EntityID, "remote_session", monitoring.SeverityInfo, "Запрошен удалённый сеанс с «"+or(x.SourceName, "клиента")+"»")
-	s.enqueue(x.EntityID, Command{ID: ids.New(), Type: "open", SessionID: x.ID, ExpiresAt: x.ExpiresAt, Allowed: allowed})
+	s.enqueue(x.EntityID, Command{ID: ids.New(), Type: "open", SessionID: x.ID, ExpiresAt: x.ExpiresAt, Allowed: allowed, Relay: route == remoteengine.RouteRelay})
 	return s.Session(ctx, x.ID)
 }
 
@@ -245,6 +251,7 @@ func (s *Service) transition(ctx context.Context, id string, to State, reason, k
 	if to.Terminal() {
 		s.mu.Lock()
 		delete(s.secrets, id)
+		s.dropTicketsLocked(id)
 		s.mu.Unlock()
 		sev := monitoring.SeverityInfo
 		if to == StateFailed {
@@ -296,6 +303,15 @@ func (s *Service) Grant(ctx context.Context, id string) (Grant, error) {
 	if err != nil {
 		return Grant{}, err
 	}
+	if x.Route == remoteengine.RouteRelay {
+		return Grant{}, &RefusedError{Status: 409, Code: "CONFLICT", Reason: "relay",
+			Message: "Сеанс через Gateway: данные подключения выдаются только его клиенту"}
+	}
+	return s.grant(ctx, x)
+}
+
+func (s *Service) grant(ctx context.Context, x Session) (Grant, error) {
+	id := x.ID
 	switch {
 	case x.State.Terminal():
 		return Grant{}, &RefusedError{Status: 410, Code: "CONFLICT", Reason: "ended", Message: "Сеанс уже завершён"}
@@ -328,6 +344,15 @@ func (s *Service) Grant(ctx context.Context, id string) (Grant, error) {
 		ExternalClient: "rdp"}
 	if x.Allowed.Files && sec.filesToken != "" && row.info.FilesPort > 0 {
 		g.Files = &FilesInfo{URL: fmt.Sprintf("https://%s:%d", row.info.Address, row.info.FilesPort), Token: sec.filesToken, MaxBytes: 2 << 30}
+	}
+	if x.Route == remoteengine.RouteRelay { // the client never learns LAN addresses
+		g.Route, g.Host, g.Port = remoteengine.RouteRelay, "", 0
+		g.Tunnel = &remoteengine.TunnelInfo{Path: TunnelPath, Tickets: map[string]string{
+			remoteengine.ChannelRDP: s.issueTicket(x, remoteengine.ChannelRDP)}, TTLSec: s.cfg.GrantTTLSec}
+		if g.Files != nil {
+			g.Files.URL = ""
+			g.Tunnel.Tickets[remoteengine.ChannelFiles] = s.issueTicket(x, remoteengine.ChannelFiles)
+		}
 	}
 	return g, nil
 }

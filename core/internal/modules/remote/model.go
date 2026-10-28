@@ -101,25 +101,27 @@ type Host struct {
 // Session is one remote access session (metadata only: never screen
 // content, keystrokes or file contents).
 type Session struct {
-	ID           string     `json:"id"`
-	EntityID     string     `json:"entityId"`
-	HostName     string     `json:"hostName"`
-	Kind         string     `json:"kind"` // desktop | app
-	SourceName   string     `json:"sourceName"`
-	SourceEntity string     `json:"sourceEntityId"`
-	ClientID     string     `json:"clientId"`
-	Transport    string     `json:"transport"`
-	State        State      `json:"state"`
-	Reason       string     `json:"reason"`
-	Allowed      Caps       `json:"allowed"`
-	CreatedAt    time.Time  `json:"createdAt"`
-	ApprovedAt   *time.Time `json:"approvedAt"`
-	ReadyAt      *time.Time `json:"readyAt"`
-	GrantedAt    *time.Time `json:"grantedAt"`
-	ConnectedAt  *time.Time `json:"connectedAt"`
-	EndedAt      *time.Time `json:"endedAt"`
-	ExpiresAt    time.Time  `json:"expiresAt"`
-	Events       []Event    `json:"events,omitempty"`
+	ID           string `json:"id"`
+	EntityID     string `json:"entityId"`
+	HostName     string `json:"hostName"`
+	Kind         string `json:"kind"` // desktop | app
+	SourceName   string `json:"sourceName"`
+	SourceEntity string `json:"sourceEntityId"`
+	ClientID     string `json:"clientId"`
+	Transport    string `json:"transport"`
+	// Route: direct (LAN, M07) or relay (through the Remote Gateway).
+	Route       string     `json:"route"`
+	State       State      `json:"state"`
+	Reason      string     `json:"reason"`
+	Allowed     Caps       `json:"allowed"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	ApprovedAt  *time.Time `json:"approvedAt"`
+	ReadyAt     *time.Time `json:"readyAt"`
+	GrantedAt   *time.Time `json:"grantedAt"`
+	ConnectedAt *time.Time `json:"connectedAt"`
+	EndedAt     *time.Time `json:"endedAt"`
+	ExpiresAt   time.Time  `json:"expiresAt"`
+	Events      []Event    `json:"events,omitempty"`
 }
 
 // Event is one audit entry of a session.

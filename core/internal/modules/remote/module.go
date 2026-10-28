@@ -64,6 +64,7 @@ func (m *Module) RegisterRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/agent/hello", m.agentHello, auth)
 	r.Handle(http.MethodGet, "/remote/agent/commands", m.agentCommands, auth)
 	r.Handle(http.MethodPost, "/remote/agent/sessions/{id}/events", m.agentEvent, auth)
+	m.registerClientRoutes(r)
 }
 
 func apiError(err error) error {

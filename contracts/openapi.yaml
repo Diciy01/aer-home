@@ -1783,6 +1783,379 @@ paths:
                       data: { $ref: '#/components/schemas/NetworkOverview' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /remote/clients:
+    get:
+      x-aer-status: implemented
+      summary: "Remote access clients (AER Connect etc.), newest first"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteClient' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: "Create a client with allowed hosts and rights; the answer carries the one-time pairing code (15 min)"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteClientInput' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemotePairing' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/clients/{id}:
+    put:
+      x-aer-status: implemented
+      summary: "Change name, hosts and rights of a client"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteClientInput' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteClient' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/clients/{id}/pairing:
+    post:
+      x-aer-status: implemented
+      summary: "New one-time pairing code; pairing replaces the client credential"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemotePairing' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/clients/{id}/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Revoke the client for good and revoke its sessions"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteClient' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/pair:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: redeem a pairing code once; returns the client credential aerc1.<id>.<secret>"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code], properties: { code: { type: string }, deviceName: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [clientId, name, credential], properties: { clientId: { type: string }, name: { type: string }, credential: { type: string } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/gw/client/hosts:
+    get:
+      x-aer-status: implemented
+      summary: "Gateway: hosts the client (X-AER-Remote-Client) may use, without LAN addresses"
+      security:
+        - gatewayAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [client, hosts], properties: { client: { type: object }, hosts: { type: array, items: { $ref: '#/components/schemas/RemoteHost' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/gw/client/sessions:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: start a relay session for the client (Idempotency-Key scoped to the client)"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteNewSession' }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/gw/client/sessions/{id}:
+    get:
+      x-aer-status: implemented
+      summary: "Gateway: a session of this client (others: 404)"
+      security:
+        - gatewayAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/client/sessions/{id}/grant:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: one-time relay grant (password, pinned host certificate, tunnel tickets)"
+      security:
+        - gatewayAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteGrant' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/gw/client/sessions/{id}/tickets:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: fresh one-time ticket for a reconnect (limited per session)"
+      security:
+        - gatewayAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [channel], properties: { channel: { type: string, enum: [rdp, files] } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [ticket, ttlSec], properties: { ticket: { type: string }, ttlSec: { type: integer } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/gw/client/sessions/{id}/end:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: the client ends its session"
+      security:
+        - gatewayAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string }, description: "" }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/tunnel/claim:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: redeem a client leg ticket (once, in time, own client, live session)"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [ticket], properties: { ticket: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteTunnelClaim' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/gw/tunnel/host:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: check a host agent leg (X-AER-Remote-Agent) of its own ready relay session"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sessionId, channel], properties: { sessionId: { type: string }, channel: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteTunnelClaim' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '403':
+          description: forbidden
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  /remote/gw/tunnel/event:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: audit a tunnel opened, closed or refused (metadata only)"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sessionId, kind], properties: { sessionId: { type: string }, kind: { type: string, enum: [tunnel_opened, tunnel_closed, tunnel_refused] }, message: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/gw/alive:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: which of its tunnelled sessions are still running"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [sessions], properties: { sessions: { type: array, maxItems: 256, items: { type: string } } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [active], properties: { active: { type: array, items: { type: string } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -1790,6 +2163,10 @@ components:
       type: http
       scheme: bearer
       description: Per-agent credential (aer1.<agentId>.<secret>) bound to one Registry entity; revocable. Never the owner token.
+    gatewayAuth:
+      type: http
+      scheme: bearer
+      description: The Remote Gateway's agent credential (kind=gateway). Client operations also need the remote client credential (aerc1.<clientId>.<secret>) in X-AER-Remote-Client; host legs the host agent credential in X-AER-Remote-Agent. See ADR-017.
   responses:
     Unauthorized:
       description: Missing or invalid bearer token
@@ -2166,7 +2543,7 @@ components:
         id: { type: string, format: uuid }
         entityId: { type: string, format: uuid }
         name: { type: string }
-        kind: { type: string, enum: [host, bot, remote, power] }
+        kind: { type: string, enum: [host, bot, remote, power, gateway] }
         createdAt: { type: string, format: date-time }
         revokedAt: { type: [string, 'null'], format: date-time }
         lastSeenAt: { type: [string, 'null'], format: date-time }
@@ -2180,7 +2557,7 @@ components:
       properties:
         entityId: { type: string, format: uuid }
         name: { type: string, minLength: 1, maxLength: 80 }
-        kind: { type: string, enum: [host, bot, remote, power] }
+        kind: { type: string, enum: [host, bot, remote, power, gateway] }
     CreatedAgent:
       type: object
       required: [agent, token]
@@ -2779,13 +3156,14 @@ components:
         message: { type: string }
     RemoteSession:
       type: object
-      required: [id, entityId, hostName, kind, sourceName, sourceEntityId, clientId, transport, state, reason, allowed, createdAt,
+      required: [id, entityId, hostName, kind, sourceName, sourceEntityId, clientId, transport, route, state, reason, allowed, createdAt,
         approvedAt, readyAt, grantedAt, connectedAt, endedAt, expiresAt]
       properties:
         id: { type: string, format: uuid }
         entityId: { type: string, format: uuid }
         hostName: { type: string }
         kind: { type: string, enum: [desktop, app] }
+        route: { type: string, enum: [direct, relay] }
         sourceName: { type: string }
         sourceEntityId: { type: string }
         clientId: { type: string }
@@ -2871,6 +3249,45 @@ components:
                 ttlSec: { type: integer }
         expiresAt: { type: string, format: date-time }
         externalClient: { type: string }
+    RemoteClientInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 80 }
+        hosts: { type: array, items: { type: string } }
+        clipboard: { type: boolean }
+        files: { type: boolean }
+    RemoteClient:
+      type: object
+      required: [id, name, hosts, clipboard, files, deviceName, paired, pairPending, createdAt, pairedAt, lastSeenAt, lastAddr, revokedAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        hosts: { type: array, items: { type: string } }
+        clipboard: { type: boolean }
+        files: { type: boolean }
+        deviceName: { type: string }
+        paired: { type: boolean }
+        pairPending: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        pairedAt: { type: [string, 'null'], format: date-time }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        lastAddr: { type: string }
+        revokedAt: { type: [string, 'null'], format: date-time }
+    RemotePairing:
+      type: object
+      required: [client, code, expiresAt]
+      properties:
+        client: { $ref: '#/components/schemas/RemoteClient' }
+        code: { type: string, description: "XXXX-XXXX-XXXX, one use, shown once" }
+        expiresAt: { type: string, format: date-time }
+    RemoteTunnelClaim:
+      type: object
+      required: [sessionId, entityId, channel]
+      properties:
+        sessionId: { type: string }
+        entityId: { type: string }
+        channel: { type: string, enum: [rdp, files] }
     RemoteApps:
       type: object
       required: [status, reason, apps]

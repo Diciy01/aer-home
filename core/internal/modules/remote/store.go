@@ -2,8 +2,9 @@ package remote
 
 import "aerhome/core/internal/foundation/storage"
 
-// Tables owned by Remote. Times are Unix milliseconds (UTC). Passwords and
-// file tokens are never stored: they live in memory until handed over.
+// Tables owned by Remote. Times are Unix milliseconds (UTC). Passwords,
+// file tokens and tunnel tickets are never stored: they live in memory
+// until handed over. Client credentials and pairing codes: SHA-256 only.
 var migrations = []storage.Migration{
 	{Version: 1, Name: "create_remote", SQL: `
 CREATE TABLE remote_hosts (
@@ -57,5 +58,25 @@ CREATE TABLE remote_events (
 	message    TEXT NOT NULL
 );
 CREATE INDEX remote_events_session ON remote_events(session_id, id);
+`}, {Version: 2, Name: "remote_clients_relay", SQL: `
+CREATE TABLE remote_clients (
+	id           TEXT PRIMARY KEY,
+	name         TEXT NOT NULL,
+	hosts        TEXT NOT NULL,
+	clipboard    INTEGER NOT NULL,
+	files        INTEGER NOT NULL,
+	secret_hash  BLOB,
+	pair_hash    BLOB UNIQUE,
+	pair_expires INTEGER,
+	device_name  TEXT NOT NULL DEFAULT '',
+	created_at   INTEGER NOT NULL,
+	paired_at    INTEGER,
+	last_seen_at INTEGER,
+	last_addr    TEXT NOT NULL DEFAULT '',
+	revoked_at   INTEGER
+);
+
+ALTER TABLE remote_sessions ADD COLUMN route TEXT NOT NULL DEFAULT 'direct';
+CREATE INDEX remote_sessions_client ON remote_sessions(client_id, created_at);
 `},
 }

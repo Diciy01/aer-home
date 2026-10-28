@@ -49,6 +49,9 @@ type Service struct {
 	mu       sync.Mutex
 	secrets  map[string]*secret     // sessionID → one-time connection secrets
 	queues   map[string]*agentQueue // entityID → commands for the host agent
+	tickets  map[[32]byte]*ticket   // SHA-256(ticket) → one-time relay ticket
+	issued   map[string]int         // sessionID → tickets issued (limit)
+	fails    map[string]*failures   // clientID → recent credential failures
 }
 
 type secret struct {
@@ -70,7 +73,8 @@ func NewService(db *sql.DB, reg registry.Reader, mon *monitoring.Service, cfg co
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &Service{db: db, reg: reg, mon: mon, cfg: cfg, log: log, now: now,
-		secrets: map[string]*secret{}, queues: map[string]*agentQueue{}}
+		secrets: map[string]*secret{}, queues: map[string]*agentQueue{},
+		tickets: map[[32]byte]*ticket{}, issued: map[string]int{}, fails: map[string]*failures{}}
 }
 
 func ms(t time.Time) int64 { return t.UTC().UnixMilli() }
