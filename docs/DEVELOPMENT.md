@@ -188,3 +188,12 @@ AER_WINDOW_SIZE=1920x1080 AER_CORE_URL=http://127.0.0.1:18798 AER_CORE_TOKEN_FIL
 python3 -I tools/network-lab/real_check.py $(mktemp -d) --router <IP роутера> --tv <IP ТВ> --internet 1.1.1.1:443 --internet 9.9.9.9:443
 ```
 Остановка стенда — `kill` PID Core из `$L/lab.json`.
+
+## Android (M12): сборка, тесты, эмулятор
+Подробно — `ANDROID.md` («Сборка и проверки»). Кратко:
+```bash
+cd apps/android && echo "sdk.dir=$ANDROID_HOME" > local.properties
+./gradlew :core-api:test :scene:test :app:testDebugUnitTest :app:lintDebug :app:assembleRelease
+# сквозные тесты против изолированного стенда (tools/network-lab + tools/mobile-lab), эмулятор видит хост как 10.0.2.2
+./gradlew connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.aerToken="$(cat $LAB/data/core.token)"
+```

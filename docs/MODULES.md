@@ -13,7 +13,7 @@
 | Integrations | Beszel, Docker, MeshCentral/etc adapters | ломать Core при отказе внешнего сервиса | по одному |
 | Desktop | Flutter Windows/Linux, scene, classic, app shell | core business logic | 01–03 |
 | iOS | SwiftUI/Swift + scene, classic, remote apps | общий desktop stream на телефоне | позднее |
-| Android | Kotlin/Compose + scene, classic | общий desktop stream на телефоне | позднее |
+| Android | Kotlin/Compose: «Дом» (сцена v1, просмотр) и «Классика» — `apps/android`, ADR-016, `ANDROID.md` | общий desktop stream на телефоне; редактирование сцены | M12 DONE (эмулятор) |
 
 ## Интерфейсы (концептуальные, уточнить в коде)
 - `EntityRepository`: create/get/list/update/archive with optimistic version. **Реализовано в M02** как `registry.Reader` (Get/List/Relations/Catalog) — единственный способ для других модулей читать Registry (ADR-008).
