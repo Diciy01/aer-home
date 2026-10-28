@@ -13,7 +13,7 @@
 План (отмечать по мере выполнения):
 - [x] S-Power: инвентаризация загрузчика/SB/NIC/BitLocker (только чтение), реальные детали — в `docs/private/LOCAL_NOTES.md`
 - [x] Core: config `power`, модуль `power` (WoL, задания, политика, аудит), kind=power в Monitoring, ADR-014
-- [ ] Агент `aer-power-host` (фиксированные адаптеры linux/windows, по умолчанию dry-run)
+- [x] Агент `aer-power-host` (фиксированные адаптеры linux/windows, по умолчанию check mode), инвентаризация на реальном ПК проверена (только чтение)
 - [x] OpenAPI 0.9.0 + контрактный тест (Magic Packet на тестовый приёмник 127.0.0.1)
 - [ ] Flutter: раздел «Питание», панель в доме, тесты
 - [ ] Живая проверка: Core + агент (dry-run) + тестовый UDP-приёмник WoL на 127.0.0.1

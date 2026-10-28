@@ -1,0 +1,8 @@
+{
+  "coreUrl": "http://127.0.0.1:8787",
+  "tokenFile": "/home/USER/.config/aer-home/power-host.token",
+  "execute": false,
+  "allow": ["shutdown", "reboot", "suspend", "bootNext"],
+  "bootNextHelper": ["sudo", "-n", "/usr/bin/efibootmgr"],
+  "windowsDelaySec": 30
+}
