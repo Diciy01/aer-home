@@ -923,3 +923,15 @@ func TestPrune(t *testing.T) {
 		t.Fatalf("kept %d", len(j))
 	}
 }
+
+func TestChecksWithoutAgentDoNotPanic(t *testing.T) {
+	f := newFx(t)
+	e := f.computer(t, "ПК (тест)")
+	d := f.device(t, e.ID)
+	if c := f.svc.checks(&d, ActionReboot, Target{}); len(c) != 1 || c[0].OK {
+		t.Fatalf("checks: %+v", c)
+	}
+	if r := f.svc.risks(&d, ActionSwitchOS, Target{Label: "Windows"}); len(r) == 0 {
+		t.Fatal("risks")
+	}
+}

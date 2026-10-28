@@ -210,7 +210,11 @@ func (s *Service) checks(d *Device, action string, target Target) []Check {
 		add("state", true, "Сейчас: "+d.StateReason)
 		return out
 	}
-	add("agent", act != nil, "Агент: "+act.Info.Hostname+" ("+or(osLabels[act.Info.OS], act.Info.OS)+")")
+	if act == nil { // the agent went silent between the availability check and now
+		add("agent", false, "Агент питания не на связи")
+		return out
+	}
+	add("agent", true, "Агент: "+act.Info.Hostname+" ("+or(osLabels[act.Info.OS], act.Info.OS)+")")
 	if act.Info.DryRun {
 		add("dry_run", false, "Агент в режиме проверки: команда не будет выполнена (SIMULATED)")
 	}

@@ -49,3 +49,4 @@ Flutter (11 новых, всего 187): токен подтверждения +
 - Go: `gofmt` чисто, `go vet ./...`, `go test ./...`, `go test -race` для power/powerhost/monitoring/core — ok; `GOOS=windows go build ./cmd/aer-power-host` — ok.
 - Flutter: `flutter analyze` — без замечаний; `flutter test` — 187 ok; `flutter build linux --release` — ok.
 - Живые: `integration_test/power_live_test.dart` против стенда `tools/power-lab` — ok.
+- Повторная проверка перед публикацией (2026-10-28): все Go-тесты (+race), сборка агентов под Windows, Flutter 187, release, живой тест на стенде — ok; в логах Core и агента стенда токенов нет. Исправлено: план подтверждения не падает, если агент пропал между проверкой доступности и построением плана.
