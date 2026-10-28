@@ -1,0 +1,21 @@
+{
+  "network": {
+    "intervalSec": 30,
+    "timeoutSec": 5,
+    "failuresBeforeDown": 2,
+    "internet": { "targets": ["1.1.1.1:443", "9.9.9.9:443"] },
+    "routers": [
+      { "entityId": "00000000-0000-0000-0000-000000000000", "upnpUrl": "http://192.168.1.1:1900/rootDesc.xml" }
+    ],
+    "sunshine": [
+      {
+        "id": "main-pc",
+        "name": "Sunshine на основном ПК",
+        "entityId": "",
+        "tvEntityId": "",
+        "serverInfoUrl": "http://127.0.0.1:47989",
+        "webUrl": "https://127.0.0.1:47990"
+      }
+    ]
+  }
+}

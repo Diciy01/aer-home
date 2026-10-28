@@ -31,6 +31,8 @@ type observation struct {
 	reachable bool
 	contact   *time.Time
 	cause     string
+	// latency of the answering probe (TCP connect / HTTP), when measured.
+	latency *time.Duration
 }
 
 // entitySettings are optional overrides in Registry attributes.monitoring.
@@ -112,6 +114,13 @@ func (s *Service) checkEntity(ctx context.Context, e registry.Entity) {
 	obs := s.observe(ctx, e)
 	// The probe may have used up the check deadline; the result is still saved.
 	s.apply(context.WithoutCancel(ctx), e, obs)
+	if obs.latency != nil {
+		v := float64(obs.latency.Microseconds()) / 1000
+		if err := s.storeSamples(context.WithoutCancel(ctx), e.ID, "probe:"+obs.kind,
+			[]SampleIn{{Metric: "net.latency", Value: &v, At: s.now().UTC()}}); err != nil {
+			s.log.Warn("latency sample", "err", err)
+		}
+	}
 }
 
 func (s *Service) observe(ctx context.Context, e registry.Entity) observation {
@@ -260,7 +269,8 @@ func (s *Service) probeHTTP(ctx context.Context, raw string) observation {
 	}
 	_, _ = io.CopyN(io.Discard, resp.Body, 1024)
 	resp.Body.Close()
-	took := s.now().Sub(start).Milliseconds()
+	tookD := s.now().Sub(start)
+	took := tookD.Milliseconds()
 	now := s.now().UTC()
 	switch {
 	case resp.StatusCode >= 500:
@@ -270,7 +280,8 @@ func (s *Service) probeHTTP(ctx context.Context, raw string) observation {
 		return observation{status: StatusDegraded, kind: "http", reachable: true, contact: &now,
 			reason: fmt.Sprintf("HTTP %d за %d мс — сервер отвечает, но страница с ошибкой", resp.StatusCode, took)}
 	}
-	return observation{status: StatusOnline, kind: "http", reachable: true, contact: &now, reason: fmt.Sprintf("HTTP %d за %d мс", resp.StatusCode, took)}
+	return observation{status: StatusOnline, kind: "http", reachable: true, contact: &now, latency: &tookD,
+		reason: fmt.Sprintf("HTTP %d за %d мс", resp.StatusCode, took)}
 }
 
 // probeTCP checks reachability by TCP connect. A refused connection proves
@@ -283,16 +294,19 @@ func (s *Service) probeTCP(ctx context.Context, host string, ports []int) observ
 	type res struct {
 		port int
 		err  error
+		took time.Duration
 	}
 	out := make(chan res, len(ports))
 	for _, p := range ports {
 		go func() {
 			var d net.Dialer
+			start := time.Now() // wall clock: latency is a real duration, not test time
 			conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(p)))
+			took := time.Since(start)
 			if err == nil {
 				conn.Close()
 			}
-			out <- res{p, err}
+			out <- res{p, err, took}
 		}()
 	}
 	var lastErr error
@@ -301,9 +315,10 @@ func (s *Service) probeTCP(ctx context.Context, host string, ports []int) observ
 		now := s.now().UTC()
 		switch {
 		case r.err == nil:
-			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, reason: fmt.Sprintf("Отвечает на TCP-порт %d", r.port)}
+			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, latency: &r.took,
+				reason: fmt.Sprintf("Отвечает на TCP-порт %d", r.port)}
 		case errors.Is(r.err, syscall.ECONNREFUSED):
-			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now,
+			return observation{status: StatusOnline, kind: "tcp", reachable: true, contact: &now, latency: &r.took,
 				reason: fmt.Sprintf("Хост в сети (порт %d закрыт, но ответил отказом)", r.port)}
 		case isDNSError(r.err):
 			return observation{status: StatusUnknown, kind: "tcp", reason: "Не удалось разрешить имя хоста (DNS)"}

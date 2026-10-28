@@ -23,13 +23,21 @@ func (s *Service) AppendLog(ctx context.Context, entityID, source string, lvl Lo
 		return nil
 	}
 	_, err := s.db.ExecContext(ctx, `INSERT INTO mon_logs (ts, entity_id, source, level, message) VALUES (?,?,?,?,?)`,
-		ms(s.now()), entityID, truncate(source, 160), levelNum[lvl], cleanMessage(msg))
+		ms(s.now()), nullStr(optEntity(entityID)), truncate(source, 160), levelNum[lvl], cleanMessage(msg))
 	return err
 }
 
-// RecordEvent appends to the event history of an entity.
+// optEntity: "" means "not about a Registry entity" (e.g. the internet link).
+func optEntity(id string) *string {
+	if id == "" {
+		return nil
+	}
+	return &id
+}
+
+// RecordEvent appends to the event history of an entity ("" — global).
 func (s *Service) RecordEvent(ctx context.Context, entityID, kind string, sev Severity, msg string) {
-	s.event(ctx, &entityID, kind, sev, Redact(msg), nil)
+	s.event(ctx, optEntity(entityID), kind, sev, Redact(msg), nil)
 }
 
 // StoreSamples records Core-collected measurements (process CPU/RAM of a
@@ -41,9 +49,8 @@ func (s *Service) StoreSamples(ctx context.Context, entityID, source string, sam
 // RaiseIncident opens (or groups into) the unresolved incident of key.
 // Keys of other modules must carry their own prefix ("n8n:", "bot_process:").
 func (s *Service) RaiseIncident(ctx context.Context, key, title, source, entityID string, sev Severity, cause, msg string) {
-	id := entityID
-	if _, opened := s.openIncident(ctx, incidentSpec{key: key, title: title, source: source, entityID: &id,
-		severity: sev, cause: Redact(cause), message: Redact(msg)}); opened {
+	if _, opened := s.openIncident(ctx, incidentSpec{key: key, title: title, source: source, entityID: optEntity(entityID),
+		severity: sev, cause: Redact(cause), message: Redact(msg)}); opened && entityID != "" {
 		s.RefreshEntity(ctx, entityID)
 	}
 }

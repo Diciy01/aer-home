@@ -89,6 +89,7 @@ var MetricTypes = []MetricType{
 	{ID: "disk.free_bytes", Label: "Свободно на диске", Unit: "B", Description: "Свободное место", LabelKey: "mount"},
 	{ID: "net.rx_rate", Label: "Сеть: приём", Unit: "B/s", Description: "Входящий трафик", LabelKey: "iface"},
 	{ID: "net.tx_rate", Label: "Сеть: передача", Unit: "B/s", Description: "Исходящий трафик", LabelKey: "iface"},
+	{ID: "net.latency", Label: "Задержка", Unit: "ms", Description: "Время ответа на проверку Core (TCP-соединение или HTTP), не ICMP ping", Key: true},
 	{ID: "net.errors_rate", Label: "Сеть: ошибки", Unit: "1/s", Description: "Ошибки и отброшенные пакеты", LabelKey: "iface"},
 	{ID: "cpu.temperature", Label: "Температура CPU", Unit: "°C", Description: "Датчик процессора", Key: true},
 	{ID: "gpu.usage", Label: "Загрузка GPU", Unit: "%", Description: "Если драйвер предоставляет"},

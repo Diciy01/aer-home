@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.9.0
+  version: 0.10.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -36,6 +36,12 @@ info:
     host agent protocol (agentAuth, kind=power: hello with boot inventory, long-poll commands, job
     events). Agent kind `power`, Registry capability `power.suspend`. Additive.
     See docs/adr/ADR-014-power.md.
+    0.10.0 — Network + TV (M09) under /network: overview (summary, internet check, routers with
+    Monitoring reachability/latency and an optional read-only UPnP IGD WAN check, network devices,
+    TVs, Sunshine servers with their host and TV shown separately, open network incidents, recent
+    `net.*` log lines) and a rate-limited manual check. Monitoring gains the metric `net.latency`
+    (TCP/HTTP probe time) and accepts events/logs/incidents without an entity. Additive.
+    See docs/adr/ADR-015-network-tv.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -1738,6 +1744,39 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /network/overview:
+    get:
+      x-aer-status: implemented
+      summary: "Home network and TV streaming: summary, internet, routers, devices, TVs, Sunshine, incidents, recent checks"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/NetworkOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /network/check:
+    post:
+      x-aer-status: implemented
+      summary: "Run all network checks now (read-only; at most once per 5 s) and return the overview"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/NetworkOverview' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -3035,3 +3074,98 @@ components:
       properties:
         kind: { type: string, enum: [accepted, executing, simulated, failed] }
         message: { type: string }
+    NetworkStatus: { type: string, enum: [up, down, error, unconfigured, unknown] }
+    NetworkTarget:
+      type: object
+      required: [target, ok, latencyMs, error]
+      properties:
+        target: { type: string }
+        ok: { type: boolean }
+        latencyMs: { type: [number, 'null'] }
+        error: { type: string }
+    NetworkDetails:
+      type: object
+      properties:
+        targets: { type: array, items: { $ref: '#/components/schemas/NetworkTarget' } }
+        connection: { type: string, description: "UPnP NewConnectionStatus" }
+        physicalLink: { type: string }
+        uptimeSec: { type: integer }
+        downMbps: { type: number }
+        upMbps: { type: number }
+        streaming: { type: boolean, description: "Sunshine state is *_BUSY" }
+        version: { type: string }
+        currentApp: { type: integer }
+        webReachable: { type: boolean }
+    NetworkCheck:
+      type: object
+      required: [key, kind, name, entityId, status, reason, latencyMs, lastCheckAt, lastOkAt, changedAt, failures, stale, details]
+      properties:
+        key: { type: string }
+        kind: { type: string, enum: [internet, router_wan, sunshine] }
+        name: { type: string }
+        entityId: { type: string }
+        status: { $ref: '#/components/schemas/NetworkStatus' }
+        reason: { type: string }
+        latencyMs: { type: [number, 'null'] }
+        lastCheckAt: { type: [string, 'null'], format: date-time }
+        lastOkAt: { type: [string, 'null'], format: date-time }
+        changedAt: { type: [string, 'null'], format: date-time }
+        failures: { type: integer }
+        stale: { type: boolean }
+        details: { oneOf: [{ $ref: '#/components/schemas/NetworkDetails' }, { type: 'null' }] }
+    NetworkDevice:
+      type: object
+      required: [entityId, name, type, address, status, reason, monitoringStatus, latencyMs, latencyAt, lastContactAt, lastCheckAt, changedAt, stale, openIncidents]
+      properties:
+        entityId: { type: string, format: uuid }
+        name: { type: string }
+        type: { type: string }
+        address: { type: string }
+        status: { $ref: '#/components/schemas/NetworkStatus' }
+        reason: { type: string }
+        monitoringStatus: { type: string }
+        latencyMs: { type: [number, 'null'] }
+        latencyAt: { type: [string, 'null'], format: date-time }
+        lastContactAt: { type: [string, 'null'], format: date-time }
+        lastCheckAt: { type: [string, 'null'], format: date-time }
+        changedAt: { type: [string, 'null'], format: date-time }
+        stale: { type: boolean }
+        openIncidents: { type: integer }
+    NetworkRouter:
+      type: object
+      required: [device, adapter, adapterNote, wan]
+      properties:
+        device: { $ref: '#/components/schemas/NetworkDevice' }
+        adapter: { type: string, enum: [upnp, none] }
+        adapterNote: { type: string }
+        wan: { oneOf: [{ $ref: '#/components/schemas/NetworkCheck' }, { type: 'null' }] }
+    NetworkSunshine:
+      type: object
+      required: [id, name, webUrl, check, entity, tv]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        webUrl: { type: string }
+        check: { $ref: '#/components/schemas/NetworkCheck' }
+        entity: { oneOf: [{ $ref: '#/components/schemas/NetworkDevice' }, { type: 'null' }] }
+        tv: { oneOf: [{ $ref: '#/components/schemas/NetworkDevice' }, { type: 'null' }] }
+    NetworkOverview:
+      type: object
+      required: [summary, internet, routers, devices, tvs, sunshine, incidents, recent, intervalSec, generatedAt]
+      properties:
+        summary:
+          type: object
+          required: [level, title, issues]
+          properties:
+            level: { type: string, enum: [ok, warning, critical, unconfigured] }
+            title: { type: string }
+            issues: { type: array, items: { type: string } }
+        internet: { $ref: '#/components/schemas/NetworkCheck' }
+        routers: { type: array, items: { $ref: '#/components/schemas/NetworkRouter' } }
+        devices: { type: array, items: { $ref: '#/components/schemas/NetworkDevice' } }
+        tvs: { type: array, items: { $ref: '#/components/schemas/NetworkDevice' } }
+        sunshine: { type: array, items: { $ref: '#/components/schemas/NetworkSunshine' } }
+        incidents: { type: array, items: { $ref: '#/components/schemas/Incident' } }
+        recent: { type: array, items: { $ref: '#/components/schemas/LogEntry' } }
+        intervalSec: { type: integer }
+        generatedAt: { type: string, format: date-time }

@@ -886,3 +886,68 @@ func TestSilentHostWithManyPortsIsStillRecorded(t *testing.T) {
 		t.Fatalf("result must be saved even after the deadline: %+v", st)
 	}
 }
+
+// TestProbeLatencyAndGlobalHooks: a TCP check stores net.latency for the
+// entity (M09); hooks accept records that belong to no entity (internet).
+func TestProbeLatencyAndGlobalHooks(t *testing.T) {
+	f := newFixture(t)
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			c.Close()
+		}
+	}()
+	r := f.entity(t, "Роутер (тест)", "router", ln.Addr().String())
+	f.svc.CheckAll(f.ctx)
+	lat, err := f.svc.Latest(f.ctx, r.ID, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, m := range lat {
+		if m.Metric == "net.latency" && m.Value != nil && *m.Value >= 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("no latency: %+v", lat)
+	}
+	f.svc.RecordEvent(f.ctx, "", "net_check", SeverityWarning, "Интернет недоступен (тест)")
+	if err := f.svc.AppendLog(f.ctx, "", "net.internet", LevelWarning, "проверка не прошла token=abcdefgh12345678"); err != nil {
+		t.Fatal(err)
+	}
+	f.svc.RaiseIncident(f.ctx, "network:internet", "Нет интернета (тест)", "network", "", SeverityCritical, "тест", "тест")
+	f.svc.RaiseIncident(f.ctx, "network:internet", "Нет интернета (тест)", "network", "", SeverityCritical, "тест", "тест")
+	p, err := f.svc.Incidents(f.ctx, IncidentFilter{Status: "active"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, i := range p.Items {
+		if i.Key == "network:internet" {
+			n++
+			if i.EntityID != nil {
+				t.Fatalf("entity on a global incident: %v", *i.EntityID)
+			}
+		}
+	}
+	if n != 1 {
+		t.Fatalf("grouping: %d", n)
+	}
+	logs, _ := f.svc.Logs(f.ctx, LogFilter{Source: "net."})
+	if len(logs.Items) != 1 || strings.Contains(logs.Items[0].Message, "abcdefgh12345678") {
+		t.Fatalf("logs: %+v", logs.Items)
+	}
+	f.svc.ResolveIncident(f.ctx, "network:internet", "Восстановлено (тест)")
+	if p, _ := f.svc.Incidents(f.ctx, IncidentFilter{Status: "active"}); len(p.Items) != 0 {
+		t.Fatal("not resolved")
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"aerhome/core/internal/foundation/module"
 	"aerhome/core/internal/modules/bots"
 	"aerhome/core/internal/modules/monitoring"
+	"aerhome/core/internal/modules/network"
 	"aerhome/core/internal/modules/power"
 	"aerhome/core/internal/modules/registry"
 	"aerhome/core/internal/modules/remote"
@@ -71,5 +72,16 @@ func All() []module.Named {
 			}
 			return mon.Service()
 		}, nil, nil)},
+		{Name: network.Name, New: network.Factory(func() registry.Reader {
+			if reg == nil {
+				return nil
+			}
+			return reg.Service()
+		}, func() *monitoring.Service {
+			if mon == nil {
+				return nil
+			}
+			return mon.Service()
+		}, nil)},
 	}
 }
