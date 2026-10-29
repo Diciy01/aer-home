@@ -352,7 +352,7 @@ int wmain(int argc, wchar_t** argv) {
     if (wcslen(argv[2]) == 0 || wcslen(argv[2]) > 4096) return 3;
     const int result = MessageBoxW(nullptr,
       argv[2],
-      L"AER HOME - Remote access request", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_SETFOREGROUND);
+      L"AER HOME - Remote access request", MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2 | MB_SETFOREGROUND | MB_TOPMOST);
     return result == IDYES ? 0 : 4;
   }
   if (argc != 2 || wcscmp(argv[1], L"--config-stdin") != 0) return 2;
@@ -411,6 +411,18 @@ int wmain(int argc, wchar_t** argv) {
       16, 68, 200, 30, window, reinterpret_cast<HMENU>(1), cls.hInstance, nullptr)) {
       DestroyWindow(window); shadow_server_uninit(server); shadow_server_free(server); return 3;
     }
+    // The agent hides the console with STARTUPINFO/SW_HIDE. That startup
+    // state also overrides the first top-level WS_VISIBLE/ShowWindow call.
+    // Explicitly show the notice and fail closed before starting RDP if the
+    // local Stop control is not actually visible and enabled.
+    ShowWindow(window, SW_SHOW);
+    const HWND stopButton = GetDlgItem(window, 1);
+    if (!SetWindowPos(window, HWND_TOPMOST, 0, 0, 0, 0,
+          SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW) || !IsWindowVisible(window) ||
+        !stopButton || !IsWindowVisible(stopButton) || !IsWindowEnabled(stopButton)) {
+      DestroyWindow(window); shadow_server_uninit(server); shadow_server_free(server); return 3;
+    }
+    UpdateWindow(window);
   }
   if (shadow_server_start(server) < 0) { if (window) DestroyWindow(window); shadow_server_uninit(server); shadow_server_free(server); return 3; }
   // Only readiness and lifecycle are emitted. Credentials, clipboard and
@@ -421,6 +433,7 @@ int wmain(int argc, wchar_t** argv) {
     MSG msg{}; while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) { TranslateMessage(&msg); DispatchMessageW(&msg); }
     if (GetTickCount64() >= host.deadline) stopHost();
     if (!normalDesktop()) stopHost();
+    if (window && (!IsWindowVisible(window) || IsIconic(window))) stopHost();
   }
   stopHost();
   shadow_server_stop(server); shadow_server_uninit(server); shadow_server_free(server); host.stop = nullptr;

@@ -2,9 +2,11 @@
 // an in-process Core in a temporary data dir, the Remote Gateway on
 // 127.0.0.1 with a fresh self-signed certificate, and one host agent with
 // a FAKE grdctl and a FAKE "RDP server" (greets "HOST <name>" and echoes).
-// Nothing listens beyond loopback; no real RDP server, router or computer
-// is touched. Clients (the Dart engine tests, AER Connect in development)
-// pair with the printed code.
+// Nothing listens beyond loopback. The default and -shadow modes never
+// capture a desktop. Only an explicit Windows -desktop-acceptance flag AND
+// AER_DESKTOP_ACCEPTANCE=1 select the real desktop after owner permission;
+// native local consent stays mandatory and clipboard/files are disabled.
+// Clients pair with the printed test-only code; never log that JSON line.
 //
 //	aer-remotelab            # prints one JSON line, runs until stdin closes or SIGTERM
 //	aer-remotelab -rdp 127.0.0.1:PORT -rdp-cert server.crt -rdp-key server.key
@@ -26,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -49,17 +52,21 @@ func main() {
 }
 
 var (
-	realRDP     = flag.String("rdp", "", "use this REAL RDP server on loopback (127.0.0.1:port) instead of the fake one")
-	rdpCert     = flag.String("rdp-cert", "", "with -rdp: the server's certificate (PEM), pinned by the agent")
-	rdpKey      = flag.String("rdp-key", "", "with -rdp: the server's key (PEM), for the agent's file channel")
-	shadow      = flag.String("shadow", "", "app-local aer-shadow.exe with SYNTHETIC frames only; never capture or inject input")
-	viewOnly    = flag.Bool("shadow-view-only", false, "synthetic host: deny input")
-	noClipboard = flag.Bool("no-clipboard", false, "deny host clipboard")
-	noFiles     = flag.Bool("no-files", false, "deny host files")
+	realRDP           = flag.String("rdp", "", "use this REAL RDP server on loopback (127.0.0.1:port) instead of the fake one")
+	rdpCert           = flag.String("rdp-cert", "", "with -rdp: the server's certificate (PEM), pinned by the agent")
+	rdpKey            = flag.String("rdp-key", "", "with -rdp: the server's key (PEM), for the agent's file channel")
+	shadow            = flag.String("shadow", "", "app-local aer-shadow.exe, SYNTHETIC by default; real desktop requires the separate owner-opt-in acceptance mode")
+	desktopAcceptance = flag.Bool("desktop-acceptance", false, "EXPLICIT OWNER CONSENT ONLY: use real desktop with -shadow and AER_DESKTOP_ACCEPTANCE=1; keeps native local consent, disables clipboard/files")
+	viewOnly          = flag.Bool("shadow-view-only", false, "synthetic host: deny input")
+	noClipboard       = flag.Bool("no-clipboard", false, "deny host clipboard")
+	noFiles           = flag.Bool("no-files", false, "deny host files")
 )
 
 func run() error {
 	flag.Parse()
+	if *desktopAcceptance && (*shadow == "" || runtime.GOOS != "windows" || os.Getenv("AER_DESKTOP_ACCEPTANCE") != "1") {
+		return errors.New("desktop acceptance requires Windows, -shadow and explicit AER_DESKTOP_ACCEPTANCE=1; never enabled by default")
+	}
 	if *shadow != "" && *realRDP != "" {
 		return errors.New("choose -shadow synthetic or -rdp")
 	}
@@ -210,17 +217,23 @@ func run() error {
 		GatewayURL: gwURL, GatewayCertSHA256: fp}
 	if *shadow != "" {
 		acfg.Backend, acfg.ShadowExecutable, acfg.ShadowSource, acfg.Address, acfg.Approval = "windows-shadow", *shadow, "synthetic", "127.0.0.1", "prompt"
+		if *desktopAcceptance {
+			acfg.ShadowSource = "desktop"
+		}
 		acfg.ShadowViewOnly = *viewOnly
 	}
 	acfg.Clipboard = !*noClipboard
 	acfg.Files.Enabled = !*noFiles
+	if *desktopAcceptance {
+		acfg.Clipboard, acfg.Files.Enabled = false, false
+	}
 	a, err := remotehost.New(acfg, quiet)
 	if err != nil {
 		return err
 	}
 	a.SetRunner(func(context.Context, []string) ([]byte, error) { return []byte("RDP:\n\tStatus: disabled\n"), nil },
 		func([]string) (func(), error) { return func() {}, nil })
-	if *shadow != "" {
+	if *shadow != "" && !*desktopAcceptance {
 		a.Prompt = func(context.Context, string) bool { return true }
 	} // explicit test-only synthetic source
 	if *realRDP == "" && *shadow == "" {
@@ -248,7 +261,8 @@ func run() error {
 		time.Sleep(25 * time.Millisecond)
 	}
 	out, _ := json.Marshal(map[string]string{"gateway": gwURL, "fingerprint": fp, "pairingCode": pair.Code, "clientId": pair.Client.ID,
-		"hostId": pc.ID, "coreUrl": coreURL, "ownerToken": owner, "exchangeDir": acfg.Files.Dir})
+		"hostId": pc.ID, "coreUrl": coreURL, "ownerToken": owner, "exchangeDir": acfg.Files.Dir,
+		"hostMode": acfg.ShadowSource, "rdpPort": strconv.Itoa(rdpPort)})
 	w := bufio.NewWriter(os.Stdout)
 	_, _ = w.Write(append(out, '\n'))
 	_ = w.Flush()
