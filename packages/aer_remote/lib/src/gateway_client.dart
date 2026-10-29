@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'connect_auth.dart';
+import 'registration.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'pinning.dart';
@@ -204,6 +205,24 @@ class GatewayClient {
     credential = e.clientCredential;
     return e;
   }
+
+  Future<RegistrationReply> registerInstallation({
+    required String deviceName,
+    required String boxPub,
+    required String instance,
+    String proof = '',
+  }) async => RegistrationReply.fromJson(
+    await _call(
+      'POST',
+      '/gw/v1/devices/registration',
+      body: {
+        'deviceName': deviceName,
+        'boxPub': boxPub,
+        'instance': instance,
+        if (proof.isNotEmpty) 'proof': proof,
+      },
+    ) as Map<String, dynamic>,
+  );
 
   /// This device as the server knows it (number, online, revoked …).
   Future<DeviceInfo> me() async => DeviceInfo.fromJson(

@@ -5,6 +5,7 @@
 library;
 
 export 'src/connect_auth.dart';
+export 'src/registration.dart';
 export 'src/errors.dart';
 export 'src/models.dart';
 export 'src/pinning.dart';

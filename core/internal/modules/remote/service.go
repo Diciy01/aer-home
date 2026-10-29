@@ -45,16 +45,17 @@ type Service struct {
 	log *slog.Logger
 	now func() time.Time
 
-	createMu sync.Mutex
-	mu       sync.Mutex
-	secrets  map[string]*secret     // sessionID → one-time connection secrets
-	queues   map[string]*agentQueue // entityID → commands for the host agent
-	tickets  map[[32]byte]*ticket   // SHA-256(ticket) → one-time relay ticket
-	issued   map[string]int         // sessionID → tickets issued (limit)
-	fails    map[string]*failures   // clientID → recent credential failures
-	gw       *GatewayInfo           // last report of the Remote Gateway
-	attempts map[string]*attempt    // attemptID → open device password attempt
-	authWait map[string]chan authVerdict
+	createMu       sync.Mutex
+	registrationMu sync.Mutex
+	mu             sync.Mutex
+	secrets        map[string]*secret     // sessionID → one-time connection secrets
+	queues         map[string]*agentQueue // entityID → commands for the host agent
+	tickets        map[[32]byte]*ticket   // SHA-256(ticket) → one-time relay ticket
+	issued         map[string]int         // sessionID → tickets issued (limit)
+	fails          map[string]*failures   // clientID → recent credential failures
+	gw             *GatewayInfo           // last report of the Remote Gateway
+	attempts       map[string]*attempt    // attemptID → open device password attempt
+	authWait       map[string]chan authVerdict
 }
 
 type secret struct {

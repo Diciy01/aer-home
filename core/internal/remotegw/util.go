@@ -56,21 +56,22 @@ func EnsureCert(c *Config) error {
 // limiter counts failures per address and bans an address that failed
 // too often; separately it caps pairing attempts per address.
 type limiter struct {
-	mu     sync.Mutex
-	now    func() time.Time
-	limit  int
-	window time.Duration
-	ban    time.Duration
-	pairs  int
-	fails  map[string][]time.Time
-	banned map[string]time.Time
-	paired map[string][]time.Time
+	mu         sync.Mutex
+	now        func() time.Time
+	limit      int
+	window     time.Duration
+	ban        time.Duration
+	pairs      int
+	fails      map[string][]time.Time
+	banned     map[string]time.Time
+	paired     map[string][]time.Time
+	registered map[string][]time.Time
 }
 
 func newLimiter(c Config, now func() time.Time) *limiter {
 	return &limiter{now: now, limit: c.AuthFailLimit, window: time.Duration(c.AuthFailWindowSec) * time.Second,
 		ban: time.Duration(c.BanSec) * time.Second, pairs: c.PairLimit,
-		fails: map[string][]time.Time{}, banned: map[string]time.Time{}, paired: map[string][]time.Time{}}
+		fails: map[string][]time.Time{}, banned: map[string]time.Time{}, paired: map[string][]time.Time{}, registered: map[string][]time.Time{}}
 }
 
 func recent(ts []time.Time, now time.Time, w time.Duration) []time.Time {
@@ -124,11 +125,32 @@ func (l *limiter) Pair(addr string) bool {
 	return true
 }
 
+// Polling must not consume the much smaller one-shot pairing budget.
+func (l *limiter) Registration(addr string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.now()
+	p := recent(l.registered[addr], now, time.Minute)
+	if len(p) >= 60 {
+		l.registered[addr] = p
+		return false
+	}
+	l.registered[addr] = append(p, now)
+	return true
+}
+
 // gc drops stale entries (called by the maintenance loop).
 func (l *limiter) gc() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
+	for k, v := range l.registered {
+		if v = recent(v, now, time.Minute); len(v) == 0 {
+			delete(l.registered, k)
+		} else {
+			l.registered[k] = v
+		}
+	}
 	for k, v := range l.fails {
 		if v = recent(v, now, l.window); len(v) == 0 {
 			delete(l.fails, k)

@@ -123,7 +123,7 @@ paths:
       x-aer-status: implemented
       summary: List entities with search, filters and pagination (sorted by name)
       parameters:
-        - { name: q, in: query, schema: { type: string }, description: Case-insensitive search in name, description, address, tags; all words must match }
+        - { name: q, in: query, schema: { type: string }, description: "Case-insensitive search in name, description, address, tags; all words must match" }
         - { name: type, in: query, schema: { type: array, items: { type: string } }, style: form, explode: true }
         - { name: tag, in: query, schema: { type: string } }
         - { name: capability, in: query, schema: { type: string } }
@@ -2204,6 +2204,70 @@ paths:
                       data: { type: object }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/registrations:
+    get:
+      x-aer-status: implemented
+      summary: "Owner: list verified pending automatic device registrations"
+      responses:
+        '200':
+          description: Pending requests; never challenges or credentials
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteRegistrationRequest' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/registrations/{id}/approve:
+    post:
+      x-aer-status: implemented
+      summary: "Owner: approve one verified installation; credentials sealed to its key"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Approved registration ID and status }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/registrations/{id}/reject:
+    post:
+      x-aer-status: implemented
+      summary: "Owner: reject one verified installation"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Rejected registration ID and status }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/gw/devices/registration:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: automatic installation challenge, possession proof and encrypted credential recovery"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoteRegistrationInput' }
+      responses:
+        '200':
+          description: Registration state and optional recipient-encrypted box
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteRegistrationReply' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410': { description: Pending registration expired }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { description: Registration rate or capacity limit }
   /remote/enrollments:
     get:
       x-aer-status: implemented
@@ -2535,6 +2599,38 @@ components:
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/RelationKind' } }
   schemas:
+    RemoteRegistrationInput:
+      type: object
+      required: [deviceName, boxPub, instance]
+      properties:
+        deviceName: { type: string, minLength: 1, maxLength: 80 }
+        boxPub: { type: string, description: "X25519 installation public key, base64url" }
+        instance: { type: string, minLength: 16, maxLength: 128 }
+        proof: { type: string, maxLength: 128, description: "Decrypted one-installation challenge; never a package-wide secret" }
+    RemoteRegistrationRequest:
+      type: object
+      required: [id, name, fingerprint, status, createdAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$' }
+        status: { type: string, enum: [pending] }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    RemoteRegistrationBox:
+      type: object
+      required: [ephPub, nonce, ciphertext]
+      properties:
+        ephPub: { type: string }
+        nonce: { type: string }
+        ciphertext: { type: string }
+    RemoteRegistrationReply:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [verifying, pending, approved, rejected, revoked] }
+        box: { $ref: '#/components/schemas/RemoteRegistrationBox' }
     RemoteDeviceTrust:
       type: object
       required: [enabled, devices]

@@ -272,6 +272,7 @@ func (g *Gateway) Handler() http.Handler {
 	// AER Connect Anywhere (ADR-018): self-registration with an owner's
 	// enrollment code, then connect by device number and sealed password.
 	mux.HandleFunc("POST "+apiPrefix+"/devices/enroll", g.enroll)
+	mux.HandleFunc("POST "+apiPrefix+"/devices/registration", g.registration)
 	mux.HandleFunc("GET "+apiPrefix+"/devices/me", g.forward(http.MethodGet, "/remote/gw/client/device"))
 	mux.HandleFunc("GET "+apiPrefix+"/devices/me/trust", g.forward(http.MethodGet, "/remote/gw/client/device/trust"))
 	mux.HandleFunc("PUT "+apiPrefix+"/devices/me/trust", g.forward(http.MethodPut, "/remote/gw/client/device/trust"))
@@ -446,6 +447,19 @@ func (g *Gateway) enroll(w http.ResponseWriter, r *http.Request) {
 	if err == nil && st == http.StatusOK {
 		g.log.Info("device enrolled", "addr", addrOf(r))
 	}
+	g.relay(w, r, st, raw, err)
+}
+
+func (g *Gateway) registration(w http.ResponseWriter, r *http.Request) {
+	if !g.lim.Registration(addrOf(r)) {
+		writeErr(w, http.StatusTooManyRequests, "UNAVAILABLE", "Слишком много запросов регистрации — повторите позже")
+		return
+	}
+	body, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	st, raw, err := g.coreCall(r.Context(), http.MethodPost, "/remote/gw/devices/registration", body, http.Header{"X-Aer-Client-Addr": {addrOf(r)}}, nil)
 	g.relay(w, r, st, raw, err)
 }
 

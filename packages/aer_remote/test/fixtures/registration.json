@@ -1,0 +1,16 @@
+{
+  "note": "TEST DATA ONLY. Fixed private key and fake credentials, never production.",
+  "privateKey": "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA",
+  "id": "REQUEST-TEST",
+  "instance": "INSTANCE-TEST",
+  "challenge": {
+    "ephPub": "V-8WHTgfzw8khKUnZLCg5pva3_OcbuFKOHMeUayIEF8",
+    "nonce": "1AsFveyUmdkXEJ0I",
+    "ciphertext": "nusM-a8b3myYA7cqumVeLsM22wbqTVWRLqsUB5sPJfT_WK8"
+  },
+  "credentials": {
+    "ephPub": "TfBR_ZH_yQ1w9uPBWMr-hCMnH8t7MQ1lREeY1IA04SU",
+    "nonce": "sueBDLgY2TZOtIaf",
+    "ciphertext": "KrVhPJoxaU_cjMKEG8YsWyO7wgd3EIxw7D2XVo3urcY2oAeXL0WyfdqU0zGADaUZJ1y8k7-NBNuIXEebPuWEv_sESDPbPESKDbfe9uKFw-XeWJ333MJ0LJoVaQsmv0Pw9xO82ov2U95wOvepH5VVBxPcQRuiFrgKigMyULjWIdm63SHfHsjt67LJYSndbFU9YNkR1DKnlNki5nPjgsLJd8teOh3b3G-fZtOScDRv-IkquBooJrvNPR-nwHSa0WBXYF9lt3IbDPlkWhtKjYGCRc1tA6hdmDR8IeMw-Bfx8C0UEow1vxu1LblnVliDNnhSnnIBzMt_QNeW17A-2CHytmFGKI3Nk5sS5zg"
+  }
+}

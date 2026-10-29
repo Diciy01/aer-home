@@ -37,6 +37,9 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/enrollments/{id}/revoke", m.revokeEnrollment)
 	r.Handle(http.MethodGet, "/remote/devices", m.devices)
 	r.Handle(http.MethodPost, "/remote/devices/{id}/revoke", m.revokeDevice)
+	r.Handle(http.MethodGet, "/remote/registrations", m.registrations)
+	r.Handle(http.MethodPost, "/remote/registrations/{id}/approve", m.approveRegistration)
+	r.Handle(http.MethodPost, "/remote/registrations/{id}/reject", m.rejectRegistration)
 
 	gw := httpapi.Authorize("gateway", m.gatewayAuthorizer)
 	r.Handle(http.MethodPost, "/remote/gw/pair", m.gwPair, gw)
@@ -52,6 +55,7 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/gw/alive", m.gwAlive, gw)
 	r.Handle(http.MethodPost, "/remote/gw/info", m.gwInfo, gw)
 	r.Handle(http.MethodPost, "/remote/gw/devices/enroll", m.gwEnroll, gw)
+	r.Handle(http.MethodPost, "/remote/gw/devices/registration", m.gwRegistration, gw)
 	r.Handle(http.MethodGet, "/remote/gw/client/device", m.gwDevice, gw)
 	r.Handle(http.MethodGet, "/remote/gw/client/device/trust", m.gwTrust, gw)
 	r.Handle(http.MethodPut, "/remote/gw/client/device/trust", m.gwTrustEnabled, gw)

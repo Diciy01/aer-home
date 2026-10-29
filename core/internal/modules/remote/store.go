@@ -121,4 +121,20 @@ CREATE TABLE remote_device_trust (
 );
 ALTER TABLE remote_sessions ADD COLUMN trust_revision INTEGER NOT NULL DEFAULT 0;
 `},
+	{Version: 5, Name: "remote_automatic_registration", SQL: `
+CREATE TABLE remote_registrations (
+ id TEXT PRIMARY KEY,
+ name TEXT NOT NULL,
+ box_pub TEXT NOT NULL UNIQUE,
+ instance TEXT NOT NULL,
+ status TEXT NOT NULL,
+ challenge_box TEXT NOT NULL,
+ proof_hash BLOB NOT NULL,
+ credential_box TEXT NOT NULL DEFAULT '',
+ device_id TEXT NOT NULL DEFAULT '',
+ created_at INTEGER NOT NULL,
+ expires_at INTEGER NOT NULL
+);
+CREATE INDEX remote_registrations_pending ON remote_registrations(status,expires_at);
+`},
 }
