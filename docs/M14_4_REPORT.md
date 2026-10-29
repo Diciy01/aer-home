@@ -1,6 +1,6 @@
 # M14.4 — AER Connect и управляемый Windows Host
 
-Статус: **IN_PROGRESS; ограниченная живая приёмка Windows 11 Pro — PASS**.
+Статус: **IN_PROGRESS; ограниченная живая приёмка Windows 11 Pro — PASS; AER Connect Anywhere (ID + пароль) реализован, synthetic/integration PASS**.
 Владелец отдельно разрешил текущий desktop и ввод только в безопасное окно.
 2026-10-29 подтверждены настоящие DXGI/SendInput, AER Connect через Gateway,
 отзыв и видимая кнопка Stop. Полная матрица Windows Home/clipboard/files/
@@ -230,3 +230,24 @@ helper через STARTUPINFO/SW_HIDE также скрывал первонач
 M14.4 остаётся **IN_PROGRESS**, не DONE. M11 CANCELLED; M13/Android/editor
 не начинались. Firewall, UAC, Windows RDP, службы, драйверы и системные права
 не менялись. Push не выполнялся.
+
+## AER Connect Anywhere (2026-10-29, ADR-018)
+
+Реализована модель «ID + пароль»: самостоятельная регистрация установки по коду
+владельца, постоянный 9-значный ID, временный и постоянный пароль с проверкой
+на самом хосте (сервер видит только шифротекст), автоматическое исходящее
+подключение Host к Gateway с backoff/jitter, единое приложение Host + Viewer,
+пакет Windows с Host-компонентами, установка с `-Upgrade`, развёртывание
+Ubuntu Server (`deploy/ubuntu`, `SERVER_UBUNTU.md`). Контракт 0.12.0.
+
+Проверено: Go (21 пакет, включая сквозной тест с перезапуском Gateway и Core),
+Dart ↔ Go, synthetic RDP по ID через FreeRDP FFI, настоящее окно Flutter
+(регистрация → ID/пароль → кадры → ввод → буфер → завершение → отзыв), golden,
+AER HOME 224/224, CMake/CRT, установка/запуск без SDK/удаление пакета, отказ
+elevated Host. Полная матрица, аудит безопасности и UNVERIFIED —
+[AER_CONNECT_ANYWHERE_REPORT.md](AER_CONNECT_ANYWHERE_REPORT.md).
+
+Не выполнялись: живой захват/ввод через новый Host-рантайм (сессия этого прогона
+elevated, отдельное согласие не запрашивалось), Windows Home, реальный WAN/CG-NAT,
+реальный Ubuntu Server, публикация Gateway. M14.4 остаётся IN_PROGRESS.
+Firewall, UAC, RDP, службы и роутер не менялись. Push не выполнялся.

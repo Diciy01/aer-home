@@ -6,6 +6,15 @@ Gateway, мышь/клавиша только в тестовом окне, от
 Полная матрица (Home, OS clipboard, secure desktop, сеть) ещё UNVERIFIED.
 Результаты и актуальный пакет — `M14_4_REPORT.md`.
 
+## Внутри AER Connect (ADR-018)
+
+С 2026-10-29 тот же Host запускается приложением AER Connect автоматически:
+`aer-connect-host.exe` (дочерний процесс, секреты через stdin) управляет
+`aer-shadow.exe` только для сеансов, прошедших проверку пароля хостом и
+локальное согласие. Ручной `aer-remote-host` + JSON остаются для прежней схемы.
+Под повышенными правами Host отказывается запускаться. Живая приёмка нового пути
+запуска — UNVERIFIED (`AER_CONNECT_ANYWHERE_REPORT.md`).
+
 ## Архитектура
 
 `aer-remote-host.exe` — существующий Go-агент. Backend `windows-shadow`

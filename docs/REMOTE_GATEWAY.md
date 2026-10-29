@@ -23,6 +23,21 @@ Windows Home, OS clipboard и другие расширенные сценари
 | `core/cmd/aer-remotelab` | изолированный Core + Gateway + агент, только 127.0.0.1; fake RDP, loopback sample или `-shadow` с настоящим RDP и исключительно SYNTHETIC источником |
 | `deploy/remote-gateway.example.json` | пример конфигурации Gateway |
 
+## AER Connect Anywhere (ADR-018, контракт 0.12.0)
+
+Дополнительно к таблице ниже (тот же единственный TLS-порт):
+
+| Метод и путь | Назначение |
+|---|---|
+| `POST /gw/v1/devices/enroll` `{code, deviceName, boxPub, instance}` | регистрация установки по коду владельца → номер, учётки агента и клиента (один раз); лимит как у сопряжения |
+| `GET /gw/v1/devices/me` | своё устройство: номер, статус online/offline/revoked/conflict |
+| `POST /gw/v1/connect/challenge` `{number}` | одноразовая попытка входа (60 с) и открытый ключ X25519 хоста |
+| `POST /gw/v1/connect` `{attemptId, ephPub, ciphertext}` | запечатанный пароль; ответ после вердикта хоста, затем обычный сеанс `/gw/v1/sessions/{id}` |
+
+Владелец: `/api/v1/remote/enrollments`, `/remote/devices` (Core, loopback) или
+`aer-admin` на сервере. Host AER Connect ходит только через agent proxy Gateway.
+Сервер: `SERVER_UBUNTU.md`; отчёт: `AER_CONNECT_ANYWHERE_REPORT.md`.
+
 ## Публичный API Gateway (`/gw/v1`, только HTTPS, HTTP/1.1)
 Учётка клиента — `Authorization: Bearer aerc1.<clientId>.<secret>`. Ответы — конверт ADR-007 (`{data}` / `{error:{code,message}}`).
 
