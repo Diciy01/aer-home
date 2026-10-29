@@ -165,7 +165,9 @@ const online = HostView(
 
 /// Sealing runs real (pure Dart) crypto: let it finish outside fake time.
 Future<void> settle(WidgetTester t) async {
-  await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 300)));
+  await t.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 300)),
+  );
   await t.pumpAndSettle();
 }
 
@@ -294,7 +296,16 @@ void main() {
       find.byType(Scaffold),
       matchesGoldenFile('goldens/device-bad-password.png'),
     );
+    expect(
+      t
+          .widget<TextField>(find.byKey(const Key('remote-password')))
+          .controller!
+          .text,
+      isEmpty,
+      reason: 'a refused password is never resent',
+    );
     await t.enterText(find.byKey(const Key('remote-id')), '111 111 111');
+    await t.enterText(find.byKey(const Key('remote-password')), 'anything');
     await t.tap(find.byKey(const Key('remote-connect')));
     await settle(t);
     expect(find.textContaining('с таким ID не найден'), findsOneWidget);
