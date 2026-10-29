@@ -138,15 +138,24 @@ void main() {
     await t.pumpAndSettle();
     expect(find.byKey(const Key('gw-fingerprint')), findsOneWidget);
     expect(
-      t.widget<FilledButton>(find.byKey(const Key('gw-pair'))).onPressed,
+      t.widget<FilledButton>(find.byKey(const Key('gw-enroll'))).onPressed,
       isNull,
     );
     await t.tap(find.byKey(const Key('gw-confirm')));
     await t.pumpAndSettle();
     expect(
+      t.widget<FilledButton>(find.byKey(const Key('gw-enroll'))).onPressed,
+      isNotNull,
+    );
+    // The client pairing code of earlier releases is still accepted.
+    await t.tap(find.byKey(const Key('gw-mode')));
+    await t.pumpAndSettle();
+    expect(
       t.widget<FilledButton>(find.byKey(const Key('gw-pair'))).onPressed,
       isNotNull,
     );
+    await t.tap(find.byKey(const Key('gw-mode')));
+    await t.pumpAndSettle();
     await expectLater(
       find.byType(Scaffold),
       matchesGoldenFile('goldens/fingerprint.png'),

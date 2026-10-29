@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:aer_remote/aer_remote.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,12 @@ void main(List<String> args) {
   final native = RdpNative.load();
   final c = ConnectController(
     store: ConnectSecureStore(),
+    deviceStore: ConnectSecureStore(ConnectSecureStore.deviceKey),
+    // Owner-built installers may carry the server address and pin; the
+    // enrollment code is always typed by the user.
+    preset: ServerPreset.read(
+      '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}connect.json',
+    ),
     viewerFactory: (check) {
       if (native == null) throw StateError('Компонент просмотра не найден. Переустановите полный пакет AER Connect.');
       return EmbeddedRdpViewer(native, canReconnect: check);

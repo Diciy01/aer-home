@@ -3,6 +3,7 @@ import 'package:aer_remote/aer_remote.dart';
 import 'package:flutter/material.dart';
 
 import 'controller.dart';
+import 'device_view.dart';
 import 'files_panel.dart';
 
 class ConnectApp extends StatelessWidget {
@@ -28,15 +29,31 @@ class ConnectHome extends StatefulWidget {
 
 class _ConnectHomeState extends State<ConnectHome> {
   final _address = TextEditingController(), _code = TextEditingController();
+  final _name = TextEditingController();
   String? _seen, _error;
   bool _confirmed = false, _busy = false;
+
+  /// First run registers this computer (ADR-018); the owner's client
+  /// pairing code of earlier releases stays available.
+  bool _enroll = true;
   ConnectController get c => widget.c;
+  @override
+  void initState() {
+    super.initState();
+    final p = c.preset;
+    if (p != null) _address.text = p.address;
+  }
+
   @override
   void dispose() {
     _address.dispose();
     _code.dispose();
+    _name.dispose();
     super.dispose();
   }
+
+  bool get _presetAddress =>
+      c.preset != null && _address.text.trim() == c.preset!.address;
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() {
@@ -71,7 +88,14 @@ class _ConnectHomeState extends State<ConnectHome> {
           child: ListView(
             padding: const EdgeInsets.all(AerSpacing.l),
             children: [
-              if (c.paired && !c.unauthorized)
+              if (c.device != null && _busy)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: AerSpacing.m),
+                  child: LinearProgressIndicator(),
+                ),
+              if (c.device != null)
+                ..._device(context)
+              else if (c.paired && !c.unauthorized)
                 ..._paired(context)
               else
                 ..._pairing(context),
@@ -80,7 +104,8 @@ class _ConnectHomeState extends State<ConnectHome> {
                   padding: EdgeInsets.only(top: AerSpacing.m),
                   child: LinearProgressIndicator(),
                 ),
-              if (_error != null || c.error != null)
+              // Device mode shows connect errors in the «Подключиться» card.
+              if (_error != null || (c.error != null && c.device == null))
                 Padding(
                   padding: const EdgeInsets.only(top: AerSpacing.m),
                   child: Card(
@@ -123,10 +148,17 @@ class _ConnectHomeState extends State<ConnectHome> {
             ),
           ),
         ),
-      Text('Подключение через собственный Gateway', style: text.titleMedium),
+      Text(
+        _enroll
+            ? 'Регистрация этого компьютера'
+            : 'Подключение через собственный Gateway',
+        style: text.titleMedium,
+      ),
       const SizedBox(height: AerSpacing.xs),
       Text(
-        'Домашний сервер, ваши компьютеры. Адрес и одноразовый код выдаются в AER HOME → Удалённый доступ → Клиенты.',
+        _enroll
+            ? 'Один раз: адрес домашнего сервера и код регистрации от его владельца. Дальше — только ID и пароль.'
+            : 'Домашний сервер, ваши компьютеры. Адрес и одноразовый код выдаются в AER HOME → Удалённый доступ → Клиенты.',
         style: text.bodySmall,
       ),
       const SizedBox(height: AerSpacing.m),
@@ -153,7 +185,19 @@ class _ConnectHomeState extends State<ConnectHome> {
                       ? null
                       : () => _run(() async {
                           final fp = await c.probe(_address.text);
-                          if (mounted) setState(() => _seen = fp);
+                          final matchesPreset =
+                              _presetAddress &&
+                              normalizeFingerprint(fp) ==
+                                  normalizeFingerprint(c.preset!.fingerprint);
+                          if (_presetAddress && !matchesPreset) {
+                            throw const PinMismatchException('', '');
+                          }
+                          if (mounted) {
+                            setState(() {
+                              _seen = fp;
+                              _confirmed = matchesPreset;
+                            });
+                          }
                         }),
                   icon: const Icon(Icons.shield_outlined, size: 18),
                   label: const Text('Проверить сертификат'),
@@ -168,7 +212,9 @@ class _ConnectHomeState extends State<ConnectHome> {
                 ),
                 const SizedBox(height: AerSpacing.s),
                 Text(
-                  'Сверьте с отпечатком, показанным дома в разделе «Клиенты».',
+                  _presetAddress
+                      ? 'Совпадает с отпечатком из установщика AER Connect.'
+                      : 'Сверьте с отпечатком, который владелец сервера показывает в AER HOME или командой aer-remote-gateway -fingerprint.',
                   style: text.bodySmall,
                 ),
                 CheckboxListTile(
@@ -182,6 +228,18 @@ class _ConnectHomeState extends State<ConnectHome> {
                     'Отпечаток совпадает — закрепить этот сертификат',
                   ),
                 ),
+                if (_enroll) ...[
+                  TextField(
+                    key: const Key('gw-name'),
+                    controller: _name,
+                    enabled: _confirmed && !_busy,
+                    decoration: const InputDecoration(
+                      labelText: 'Имя этого компьютера',
+                      hintText: 'Например, Домашний ПК',
+                    ),
+                  ),
+                  const SizedBox(height: AerSpacing.s),
+                ],
                 TextField(
                   key: const Key('gw-code'),
                   controller: _code,
@@ -189,24 +247,43 @@ class _ConnectHomeState extends State<ConnectHome> {
                   obscureText: true,
                   enableSuggestions: false,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Код сопряжения (XXXX-XXXX-XXXX)',
+                  decoration: InputDecoration(
+                    labelText: _enroll
+                        ? 'Код регистрации (XXXX-XXXX-XXXX)'
+                        : 'Код сопряжения (XXXX-XXXX-XXXX)',
                   ),
                 ),
                 const SizedBox(height: AerSpacing.s),
                 Wrap(
                   spacing: AerSpacing.s,
                   children: [
-                    FilledButton(
-                      key: const Key('gw-pair'),
-                      onPressed: _busy || !_confirmed
-                          ? null
-                          : () => _run(() async {
-                              await c.pair(_address.text, _seen!, _code.text);
-                              _code.clear();
-                            }),
-                      child: const Text('Сопрячь'),
-                    ),
+                    if (_enroll)
+                      FilledButton(
+                        key: const Key('gw-enroll'),
+                        onPressed: _busy || !_confirmed
+                            ? null
+                            : () => _run(() async {
+                                await c.enroll(
+                                  _address.text,
+                                  _seen!,
+                                  _code.text,
+                                  _name.text,
+                                );
+                                _code.clear();
+                              }),
+                        child: const Text('Зарегистрировать'),
+                      )
+                    else
+                      FilledButton(
+                        key: const Key('gw-pair'),
+                        onPressed: _busy || !_confirmed
+                            ? null
+                            : () => _run(() async {
+                                await c.pair(_address.text, _seen!, _code.text);
+                                _code.clear();
+                              }),
+                        child: const Text('Сопрячь'),
+                      ),
                     TextButton(
                       onPressed: _busy
                           ? null
@@ -216,6 +293,17 @@ class _ConnectHomeState extends State<ConnectHome> {
                               _code.clear();
                             }),
                       child: const Text('Другой адрес'),
+                    ),
+                    TextButton(
+                      key: const Key('gw-mode'),
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _enroll = !_enroll),
+                      child: Text(
+                        _enroll
+                            ? 'У меня код сопряжения клиента'
+                            : 'Регистрация по коду',
+                      ),
                     ),
                   ],
                 ),
@@ -227,72 +315,169 @@ class _ConnectHomeState extends State<ConnectHome> {
     ];
   }
 
-  List<Widget> _paired(BuildContext context) {
+  List<Widget> _device(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final cards = [
+      ThisComputerCard(c: c, run: _run),
+      ConnectByIdCard(c: c, onDesktop: () => _desktop(this.context)),
+    ];
     return [
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.all(AerSpacing.m),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+      if (c.deviceRevoked)
+        Card(
+          key: const Key('device-revoked'),
+          child: ListTile(
+            leading: const Icon(
+              Icons.lock_outline_rounded,
+              color: AerColors.terracotta,
+            ),
+            title: const Text('Регистрация отозвана владельцем сервера'),
+            subtitle: const Text(
+              'Этот компьютер больше не принимает и не устанавливает подключения. Получите новый код регистрации.',
+            ),
+            trailing: TextButton(
+              onPressed: _busy ? null : () => _run(c.forgetDevice),
+              child: const Text('Зарегистрировать заново'),
+            ),
+          ),
+        ),
+      LayoutBuilder(
+        builder: (context, size) {
+          final wide = size.maxWidth >= 760;
+          return Wrap(
+            spacing: AerSpacing.m,
+            runSpacing: AerSpacing.m,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.verified_user_outlined,
-                    color: AerColors.sage,
-                  ),
-                  const SizedBox(width: AerSpacing.s),
-                  Expanded(child: Text(c.address, style: text.titleSmall)),
-                  IconButton(
-                    key: const Key('gw-refresh'),
-                    tooltip: 'Обновить',
-                    onPressed: _busy ? null : () => _run(c.refresh),
-                    icon: const Icon(Icons.refresh_rounded),
-                  ),
-                ],
-              ),
-              Text(
-                'Клиент «${c.clientName}» · сертификат закреплён · защищённое хранилище ОС',
-                style: text.bodySmall,
-              ),
-              const SizedBox(height: AerSpacing.s),
-              SelectableText(
-                c.fingerprint,
-                style: text.bodySmall?.copyWith(fontFamily: 'monospace'),
-              ),
-              TextButton(
-                key: const Key('gw-forget'),
-                onPressed: _busy || c.busy
-                    ? null
-                    : () async {
-                        final yes = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Удалить сервер?'),
-                            content: const Text(
-                              'Сеанс завершится, учётные данные будут удалены с этого компьютера. Отозвать клиент можно в AER HOME.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('Отмена'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('Удалить'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (yes == true) await _run(c.forget);
-                      },
-                child: const Text('Удалить сервер'),
-              ),
+              for (final card in cards)
+                SizedBox(
+                  width: wide
+                      ? (size.maxWidth - AerSpacing.m) / 2
+                      : size.maxWidth,
+                  child: card,
+                ),
             ],
+          );
+        },
+      ),
+      ..._active(context),
+      if (c.hosts.isNotEmpty) ..._hostsSection(context),
+      const SizedBox(height: AerSpacing.l),
+      Card(
+        child: ListTile(
+          leading: const Icon(
+            Icons.verified_user_outlined,
+            color: AerColors.sage,
+          ),
+          title: Text(c.address, style: text.titleSmall),
+          subtitle: SelectableText(
+            'Сертификат закреплён · ${c.fingerprint}',
+            style: text.bodySmall?.copyWith(fontFamily: 'monospace'),
+          ),
+          trailing: TextButton(
+            key: const Key('device-forget'),
+            onPressed: _busy || c.busy
+                ? null
+                : () async {
+                    final yes = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Удалить регистрацию?'),
+                        content: const Text(
+                          'ID и учётные данные будут удалены с этого компьютера. Новая регистрация получит другой ID. Отозвать устройство на сервере может владелец.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Отмена'),
+                          ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Удалить'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (yes == true) await _run(c.forgetDevice);
+                  },
+            child: const Text('Удалить регистрацию'),
           ),
         ),
       ),
+    ];
+  }
+
+  List<Widget> _paired(BuildContext context) => [
+    _serverCard(context),
+    ..._active(context),
+    ..._hostsSection(context),
+  ];
+
+  Widget _serverCard(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AerSpacing.m),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.verified_user_outlined, color: AerColors.sage),
+                const SizedBox(width: AerSpacing.s),
+                Expanded(child: Text(c.address, style: text.titleSmall)),
+                IconButton(
+                  key: const Key('gw-refresh'),
+                  tooltip: 'Обновить',
+                  onPressed: _busy ? null : () => _run(c.refresh),
+                  icon: const Icon(Icons.refresh_rounded),
+                ),
+              ],
+            ),
+            Text(
+              'Клиент «${c.clientName}» · сертификат закреплён · защищённое хранилище ОС',
+              style: text.bodySmall,
+            ),
+            const SizedBox(height: AerSpacing.s),
+            SelectableText(
+              c.fingerprint,
+              style: text.bodySmall?.copyWith(fontFamily: 'monospace'),
+            ),
+            TextButton(
+              key: const Key('gw-forget'),
+              onPressed: _busy || c.busy
+                  ? null
+                  : () async {
+                      final yes = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Удалить сервер?'),
+                          content: const Text(
+                            'Сеанс завершится, учётные данные будут удалены с этого компьютера. Отозвать клиент можно в AER HOME.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Отмена'),
+                            ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text('Удалить'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (yes == true) await _run(c.forget);
+                    },
+              child: const Text('Удалить сервер'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _active(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return [
       if (c.hostName.isNotEmpty) ...[
         const SizedBox(height: AerSpacing.m),
         Card(
@@ -303,7 +488,7 @@ class _ConnectHomeState extends State<ConnectHome> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${c.hostName}: ${c.state.label}',
+                  '${c.hostName}: ${sessionLine(c)}',
                   key: const Key('gw-active-state'),
                   style: text.titleSmall,
                 ),
@@ -351,8 +536,19 @@ class _ConnectHomeState extends State<ConnectHome> {
           ),
         ),
       ],
+    ];
+  }
+
+  List<Widget> _hostsSection(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    return [
       const SizedBox(height: AerSpacing.l),
-      Text('Ваши компьютеры', style: text.titleMedium),
+      Text(
+        c.device != null
+            ? 'Компьютеры, разрешённые владельцем'
+            : 'Ваши компьютеры',
+        style: text.titleMedium,
+      ),
       const SizedBox(height: AerSpacing.s),
       LayoutBuilder(
         builder: (context, size) => Wrap(

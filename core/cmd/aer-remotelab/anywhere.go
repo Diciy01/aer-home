@@ -33,8 +33,8 @@ type labDevice struct {
 	// passwordFile always holds the current temporary password (TEST ONLY:
 	// the stand's own temp dir), as tests need it after each rotation.
 	passwordFile string
-	stdin                        io.WriteCloser
-	done                         chan error
+	stdin        io.WriteCloser
+	done         chan error
 }
 
 func runAnywhere(ctx context.Context, dir, gwURL, fp string, api func(method, path, body string, out any) error,
