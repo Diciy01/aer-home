@@ -1,0 +1,23 @@
+﻿name: aer_connect
+description: Dedicated client for the owner's Remote Gateway.
+publish_to: none
+version: 0.14.4+1
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+  aer_remote:
+    path: ../../packages/aer_remote
+  aer_widgets:
+    path: ../../packages/aer_widgets
+  flutter_secure_storage: ^11.2.0
+  file_selector: ^1.1.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+flutter:
+  uses-material-design: true

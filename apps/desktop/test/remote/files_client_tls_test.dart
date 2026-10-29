@@ -189,4 +189,17 @@ void main() {
       c.close();
     }
   });
+
+  test('download names cannot escape the selected directory or use Windows devices', () async {
+    await start('loopback');
+    final c = client(pin);
+    try {
+      final names = ['../escape.txt', r'..\escape.txt', '/absolute', '.hidden',
+        if (Platform.isWindows) ...['report.txt:secret','CON','LPT1.txt','trailing.','trailing ']];
+      for (final name in names) {
+        await expectLater(c.download(name, Directory.systemTemp), throwsA(isA<TransferError>()));
+      }
+      expect(requests,0);
+    } finally { c.close(); }
+  });
 }

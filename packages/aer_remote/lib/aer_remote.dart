@@ -14,3 +14,4 @@ export 'src/viewer.dart';
 export 'src/rdp/native.dart' show RdpNative, RdpFrame;
 export 'src/rdp/scancodes.dart';
 export 'src/rdp/session.dart';
+export 'src/files_client.dart';

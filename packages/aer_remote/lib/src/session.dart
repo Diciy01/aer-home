@@ -41,6 +41,17 @@ class RemoteConnection {
   LocalForwarder? files;
   Timer? _timer;
   var _ended = false;
+  var _following = false;
+
+  Future<void> _checkRunning() async {
+    if (!_ended) return;
+    // end() may arrive while create/grant/port creation is in flight.
+    await rdp?.close();
+    await files?.close();
+    await _endQuietly();
+    grant = null;
+    throw StateError('Remote session was cancelled');
+  }
 
   void _emit(RemoteState s, String msg, {Object? error}) {
     if (!_updates.isClosed) {
@@ -64,6 +75,7 @@ class RemoteConnection {
   /// Starts a session to [entityId] and returns once the local RDP port is
   /// ready (or throws). Viewers connect to `127.0.0.1:rdp.port`.
   Future<void> start(String entityId, {int? minutes}) async {
+    await _checkRunning();
     final cred = api.credential;
     if (cred == null) {
       throw const RemoteEngineException(
@@ -73,6 +85,7 @@ class RemoteConnection {
       );
     }
     session = await api.create(entityId, minutes: minutes);
+    await _checkRunning();
     _emit(session!.state, 'Запрос отправлен');
     final deadline = DateTime.now().add(readyTimeout);
     while (session!.state != RemoteState.connecting) {
@@ -93,10 +106,13 @@ class RemoteConnection {
         );
       }
       await Future<void>.delayed(poll);
+      await _checkRunning();
       session = await api.session(session!.id);
+      await _checkRunning();
       _emit(session!.state, session!.state.label);
     }
     grant = await api.grant(session!.id);
+    await _checkRunning();
     final rdpTicket = _tickets('rdp');
     rdp = await LocalForwarder.start(
       () async => openTunnel(
@@ -106,6 +122,7 @@ class RemoteConnection {
         path: grant!.tunnelPath,
       ),
     );
+    await _checkRunning();
     if (grant!.files) {
       final filesTicket = _tickets('files');
       files = await LocalForwarder.start(
@@ -116,15 +133,18 @@ class RemoteConnection {
           path: grant!.tunnelPath,
         ),
       );
+      await _checkRunning();
     }
     _emit(session!.state, 'Готово к подключению просмотрщика');
     _timer = Timer.periodic(poll, (_) => _follow());
   }
 
   Future<void> _follow() async {
-    if (_ended) return;
+    if (_ended || _following) return;
+    _following = true;
     try {
       final s = await api.session(session!.id);
+      if (_ended) return;
       final changed = s.state != session!.state;
       session = s;
       if (changed) _emit(s.state, s.reason.isEmpty ? s.state.label : s.reason);
@@ -136,6 +156,8 @@ class RemoteConnection {
       }
     } catch (e) {
       _emit(session!.state, 'Нет связи с сервером, повторяем…', error: e);
+    } finally {
+      _following = false;
     }
   }
 
@@ -145,6 +167,7 @@ class RemoteConnection {
     _timer?.cancel();
     await rdp?.close();
     await files?.close();
+    grant = null;
     if (!_updates.isClosed) await _updates.close();
   }
 
