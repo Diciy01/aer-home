@@ -95,22 +95,24 @@ type Enrolled struct {
 
 // Challenge opens one password attempt to a device.
 type Challenge struct {
-	AttemptID    string    `json:"attemptId"`
-	Number       string    `json:"number"`
-	Name         string    `json:"name"`
-	BoxPub       string    `json:"boxPub"`
-	ViewerNumber string    `json:"viewerNumber"`
-	ExpiresAt    time.Time `json:"expiresAt"`
+	IdentityProof string    `json:"identityProof,omitempty"`
+	AttemptID     string    `json:"attemptId"`
+	Number        string    `json:"number"`
+	Name          string    `json:"name"`
+	BoxPub        string    `json:"boxPub"`
+	ViewerNumber  string    `json:"viewerNumber"`
+	ExpiresAt     time.Time `json:"expiresAt"`
 }
 
 // ConnectInput carries the sealed password of an attempt.
 type ConnectInput struct {
-	AttemptID  string `json:"attemptId"`
-	EphPub     string `json:"ephPub"`
-	Ciphertext string `json:"ciphertext"`
-	Clipboard  *bool  `json:"clipboard"`
-	Files      *bool  `json:"files"`
-	Minutes    int    `json:"minutes"`
+	IdentityProof string `json:"identityProof"`
+	AttemptID     string `json:"attemptId"`
+	EphPub        string `json:"ephPub"`
+	Ciphertext    string `json:"ciphertext"`
+	Clipboard     *bool  `json:"clipboard"`
+	Files         *bool  `json:"files"`
+	Minutes       int    `json:"minutes"`
 }
 
 type attempt struct {
@@ -490,6 +492,9 @@ func (s *Service) Challenge(ctx context.Context, c Client, number string) (Chall
 	if err != nil {
 		return Challenge{}, err
 	}
+	if _, err := s.trustRevision(ctx, c.ID, d.EntityID); err != nil {
+		return Challenge{}, err
+	}
 	_ = s.db.QueryRowContext(ctx, `SELECT box_pub FROM remote_devices WHERE id = ?`, d.ID).Scan(&boxPub)
 	switch {
 	case d.RevokedAt != nil:
@@ -530,7 +535,7 @@ func (s *Service) Challenge(ctx context.Context, c Client, number string) (Chall
 	}
 	s.attempts[id] = a
 	s.mu.Unlock()
-	return Challenge{AttemptID: id, Number: number, Name: d.Name, BoxPub: boxPub, ViewerNumber: vn, ExpiresAt: a.expires.UTC()}, nil
+	return Challenge{IdentityProof: remoteengine.IdentityProofVersion, AttemptID: id, Number: number, Name: d.Name, BoxPub: boxPub, ViewerNumber: vn, ExpiresAt: a.expires.UTC()}, nil
 }
 
 // ConnectDevice redeems an attempt: one session request whose sealed
@@ -552,13 +557,22 @@ func (s *Service) ConnectDevice(ctx context.Context, c Client, in ConnectInput) 
 		return Session{}, err
 	}
 	viewerName := c.Name
+	var viewerPub string
+	if in.IdentityProof != "" {
+		if _, err := remoteengine.DecodeKey(in.IdentityProof); err != nil {
+			return Session{}, refuse(403, "FORBIDDEN", "bad_identity", "Не удалось подтвердить ключ установки")
+		}
+		if err = s.db.QueryRowContext(ctx, `SELECT box_pub FROM remote_devices WHERE client_id=? AND revoked_at IS NULL AND conflict_at IS NULL`, c.ID).Scan(&viewerPub); err != nil {
+			return Session{}, ErrClientAuth
+		}
+	}
 	if a.viewerNumber != "" {
 		viewerName = c.Name + " (ID " + a.viewerNumber + ")"
 	}
 	ns := NewSession{EntityID: d.EntityID, Kind: "desktop", SourceName: viewerName, ClientID: c.ID, Minutes: in.Minutes,
 		Clipboard: in.Clipboard, Files: in.Files,
 		auth: &remoteengine.ConnectAuth{AttemptID: in.AttemptID, EphPub: in.EphPub, Ciphertext: in.Ciphertext,
-			ViewerNumber: a.viewerNumber, ViewerName: viewerName, TargetNumber: a.number}}
+			ViewerNumber: a.viewerNumber, ViewerName: viewerName, TargetNumber: a.number, ViewerBoxPub: viewerPub, IdentityProof: in.IdentityProof}}
 	wait := make(chan authVerdict, 1)
 	x, err := s.create(ctx, ns, "", remoteengine.RouteRelay, Caps{Desktop: true, Input: true, Clipboard: true, Files: true}, func(id string) {
 		s.mu.Lock()

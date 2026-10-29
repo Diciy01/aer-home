@@ -273,6 +273,11 @@ func (g *Gateway) Handler() http.Handler {
 	// enrollment code, then connect by device number and sealed password.
 	mux.HandleFunc("POST "+apiPrefix+"/devices/enroll", g.enroll)
 	mux.HandleFunc("GET "+apiPrefix+"/devices/me", g.forward(http.MethodGet, "/remote/gw/client/device"))
+	mux.HandleFunc("GET "+apiPrefix+"/devices/me/trust", g.forward(http.MethodGet, "/remote/gw/client/device/trust"))
+	mux.HandleFunc("PUT "+apiPrefix+"/devices/me/trust", g.forward(http.MethodPut, "/remote/gw/client/device/trust"))
+	for _, action := range []string{"candidate", "grant", "revoke"} {
+		mux.HandleFunc("POST "+apiPrefix+"/devices/me/trust/"+action, g.forward(http.MethodPost, "/remote/gw/client/device/trust/"+action))
+	}
 	mux.HandleFunc("POST "+apiPrefix+"/connect/challenge", g.forward(http.MethodPost, "/remote/gw/client/connect/challenge"))
 	mux.HandleFunc("POST "+apiPrefix+"/connect", g.forward(http.MethodPost, "/remote/gw/client/connect"))
 	mux.HandleFunc("GET "+apiPrefix+"/hosts", g.forward(http.MethodGet, "/remote/gw/client/hosts"))
@@ -359,7 +364,7 @@ func (g *Gateway) relay(w http.ResponseWriter, r *http.Request, st int, raw json
 }
 
 func readBody(w http.ResponseWriter, r *http.Request) (any, bool) {
-	if r.Method != http.MethodPost {
+	if r.Method != http.MethodPost && r.Method != http.MethodPut {
 		return nil, true
 	}
 	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 64<<10))

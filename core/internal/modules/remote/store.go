@@ -108,4 +108,17 @@ CREATE TABLE remote_devices (
 
 ALTER TABLE remote_sessions ADD COLUMN auth_state TEXT NOT NULL DEFAULT '';
 `},
+	{Version: 4, Name: "remote_device_trust", SQL: `
+ALTER TABLE remote_devices ADD COLUMN unattended_enabled INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE remote_device_trust (
+ target_id TEXT NOT NULL REFERENCES remote_devices(id),
+ viewer_id TEXT NOT NULL REFERENCES remote_devices(id),
+ box_pub TEXT NOT NULL,
+ revision INTEGER NOT NULL DEFAULT 1,
+ created_at INTEGER NOT NULL,
+ revoked_at INTEGER,
+ PRIMARY KEY (target_id, viewer_id)
+);
+ALTER TABLE remote_sessions ADD COLUMN trust_revision INTEGER NOT NULL DEFAULT 0;
+`},
 }

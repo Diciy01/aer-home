@@ -12,8 +12,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"aerhome/core/internal/connecthost"
@@ -32,9 +34,10 @@ type labDevice struct {
 	number, password, enrollCode string
 	// passwordFile always holds the current temporary password (TEST ONLY:
 	// the stand's own temp dir), as tests need it after each rotation.
-	passwordFile string
-	stdin        io.WriteCloser
-	done         chan error
+	passwordFile                  string
+	clientCredential, promptsFile string
+	stdin                         io.WriteCloser
+	done                          chan error
 }
 
 func runAnywhere(ctx context.Context, dir, gwURL, fp string, api func(method, path, body string, out any) error,
@@ -54,11 +57,16 @@ func runAnywhere(ctx context.Context, dir, gwURL, fp string, api func(method, pa
 	}
 	defer res.Body.Close()
 	var env struct {
-		Data struct{ Number, AgentToken string }
+		Data struct{ Number, AgentToken, ClientCredential string }
 	}
 	if err := json.NewDecoder(res.Body).Decode(&env); err != nil || res.StatusCode != 200 {
 		return nil, fmt.Errorf("enroll lab device: HTTP %d", res.StatusCode)
 	}
+	promptsFile := filepath.Join(dir, "device-prompts.txt")
+	if err = os.WriteFile(promptsFile, []byte("0"), 0600); err != nil {
+		return nil, err
+	}
+	var prompts atomic.Int32
 	newAgent := func(cfg remotehost.Config, log *slog.Logger) (*remotehost.Agent, error) {
 		if shadowExe == "" {
 			cfg.Backend, cfg.ShadowExecutable, cfg.ShadowSource = "gnome-rdp", "", ""
@@ -76,14 +84,17 @@ func runAnywhere(ctx context.Context, dir, gwURL, fp string, api func(method, pa
 				func([]string) (func(), error) { return func() {}, nil })
 			a.Connections = connections
 		}
-		a.Prompt = func(context.Context, string) bool { return true } // TEST ONLY
+		a.Prompt = func(context.Context, string) bool {
+			_ = os.WriteFile(promptsFile, []byte(strconv.Itoa(int(prompts.Add(1)))), 0600)
+			return true
+		} // TEST ONLY, never production
 		return a, nil
 	}
 	state := filepath.Join(dir, "device")
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
 	d := &labDevice{number: env.Data.Number, enrollCode: en.Code, stdin: inW, done: make(chan error, 1),
-		passwordFile: filepath.Join(dir, "device-password.txt")}
+		passwordFile: filepath.Join(dir, "device-password.txt"), clientCredential: env.Data.ClientCredential, promptsFile: promptsFile}
 	go func() {
 		d.done <- connecthost.Run(ctx, inR, outW, connecthost.Options{NewAgent: newAgent})
 		outW.Close()

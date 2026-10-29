@@ -221,7 +221,7 @@ func (h *hostProc) send(c connecthost.Command) {
 	_, _ = h.stdin.Write(append(b, '\n'))
 }
 
-func (d *device) runHost(t *testing.T, incoming bool) *hostProc {
+func (d *device) runHost(t *testing.T, incoming bool, permanent ...*remoteengine.Verifier) *hostProc {
 	inR, inW := io.Pipe()
 	outR, outW := io.Pipe()
 	h := &hostProc{stdin: inW, done: make(chan error, 1), rdp: newFakeRDP(t, "ПК "+d.number), prompt: make(chan bool, 4)}
@@ -275,6 +275,9 @@ func (d *device) runHost(t *testing.T, incoming bool) *hostProc {
 	init := connecthost.Init{Type: "init", GatewayURL: d.s.gwURL(), GatewayCertSHA256: d.s.gwFP, AgentToken: d.agentToken, BoxKey: d.boxKey,
 		Number: d.number, InstallID: d.installT, StateDir: filepath.Join(d.s.dir, "host-"+d.number), ShadowExecutable: exe,
 		Clipboard: true, AllowIncoming: incoming}
+	if len(permanent) > 0 {
+		init.Permanent = permanent[0]
+	}
 	b, _ := json.Marshal(init)
 	_, _ = inW.Write(append(b, '\n'))
 	t.Cleanup(func() {

@@ -360,6 +360,9 @@ func (s *Service) clientSession(ctx context.Context, c Client, id string) (Sessi
 	if x.Route != remoteengine.RouteRelay || x.ClientID != c.ID {
 		return Session{}, ErrNotFound
 	}
+	if err := s.sessionTrust(ctx, x); err != nil {
+		return Session{}, err
+	}
 	return x, nil
 }
 
@@ -487,7 +490,7 @@ func (s *Service) ClaimTicket(ctx context.Context, c Client, tk string) (Claim, 
 		return Claim{}, refused
 	}
 	x, err := s.Session(ctx, t.sessionID)
-	if err != nil || x.State.Terminal() {
+	if err != nil || x.State.Terminal() || s.sessionTrust(ctx, x) != nil {
 		return Claim{}, refused
 	}
 	s.audit(ctx, x.ID, "tunnel_claimed", "Клиент открыл туннель «"+t.channel+"» через Gateway")
@@ -499,6 +502,9 @@ func (s *Service) ClaimTicket(ctx context.Context, c Client, tk string) (Claim, 
 func (s *Service) HostLeg(ctx context.Context, entityID, sessionID, channel string) (Claim, error) {
 	x, err := s.Session(ctx, sessionID)
 	if err != nil {
+		return Claim{}, err
+	}
+	if err := s.sessionTrust(ctx, x); err != nil {
 		return Claim{}, err
 	}
 	switch {
@@ -518,7 +524,7 @@ func (s *Service) HostLeg(ctx context.Context, entityID, sessionID, channel stri
 func (s *Service) Alive(ctx context.Context, sessionIDs []string) []string {
 	out := []string{}
 	for _, id := range sessionIDs {
-		if x, err := s.Session(ctx, id); err == nil && !x.State.Terminal() {
+		if x, err := s.Session(ctx, id); err == nil && !x.State.Terminal() && s.sessionTrust(ctx, x) == nil {
 			out = append(out, id)
 		}
 	}

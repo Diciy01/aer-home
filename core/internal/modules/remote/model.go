@@ -106,14 +106,15 @@ type Host struct {
 // Session is one remote access session (metadata only: never screen
 // content, keystrokes or file contents).
 type Session struct {
-	ID           string `json:"id"`
-	EntityID     string `json:"entityId"`
-	HostName     string `json:"hostName"`
-	Kind         string `json:"kind"` // desktop | app
-	SourceName   string `json:"sourceName"`
-	SourceEntity string `json:"sourceEntityId"`
-	ClientID     string `json:"clientId"`
-	Transport    string `json:"transport"`
+	TrustRevision int64  `json:"-"`
+	ID            string `json:"id"`
+	EntityID      string `json:"entityId"`
+	HostName      string `json:"hostName"`
+	Kind          string `json:"kind"` // desktop | app
+	SourceName    string `json:"sourceName"`
+	SourceEntity  string `json:"sourceEntityId"`
+	ClientID      string `json:"clientId"`
+	Transport     string `json:"transport"`
 	// Route: direct (LAN, M07) or relay (through the Remote Gateway).
 	Route       string     `json:"route"`
 	State       State      `json:"state"`

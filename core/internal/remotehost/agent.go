@@ -293,6 +293,11 @@ func (a *Agent) Hello(ctx context.Context) error {
 	}
 	if a.Auth != nil {
 		body["features"] = []string{remoteengine.FeatureConnectAuth}
+		if _, ok := a.Auth.(interface {
+			SkipApproval(remoteengine.ConnectAuth) bool
+		}); ok {
+			body["features"] = []string{remoteengine.FeatureConnectAuth, remoteengine.FeatureConnectTrust}
+		}
 	}
 	if a.Instance != "" {
 		body["instance"] = a.Instance
@@ -382,7 +387,13 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 			return
 		}
 	}
-	if a.cfg.Approval == "prompt" {
+	skipApproval := false
+	if trusted, ok := a.Auth.(interface {
+		SkipApproval(remoteengine.ConnectAuth) bool
+	}); ok && c.Auth != nil {
+		skipApproval = trusted.SkipApproval(*c.Auth)
+	}
+	if a.cfg.Approval == "prompt" && !skipApproval {
 		a.event(ctx, c.SessionID, remoteengine.EventAwaitingApproval, "", nil)
 		a.sessionState(c.SessionID, "prompt", viewer)
 		prompt := "Разрешить удалённое подключение AER HOME к этому компьютеру?"
@@ -398,7 +409,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 			return
 		}
 	}
-	if a.cfg.Backend == "windows-shadow" {
+	if a.cfg.Backend == "windows-shadow" || a.Auth != nil {
 		// Approval may have taken up to 90 seconds: do not start capture for
 		// a session that was cancelled/revoked while the user was deciding.
 		var current struct {
@@ -411,6 +422,11 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		}
 	} else {
 		a.event(ctx, c.SessionID, remoteengine.EventApproved, "", nil)
+	}
+	if guard, ok := a.Auth.(interface{ CanOpen() bool }); ok && !guard.CanOpen() {
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Входящие подключения выключены", nil)
+		a.sessionState(c.SessionID, "", "")
+		return
 	}
 	pass := newPassword()
 	var openErr error

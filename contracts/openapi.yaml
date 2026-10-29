@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.12.0
+  version: 0.13.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -2350,7 +2350,11 @@ paths:
                   - $ref: '#/components/schemas/SuccessEnvelope'
                   - type: object
                     properties:
-                      data: { type: object, required: [attemptId, number, name, boxPub, viewerNumber, expiresAt] }
+                      data:
+                        type: object
+                        required: [attemptId, number, name, boxPub, viewerNumber, expiresAt]
+                        properties:
+                          identityProof: { type: string, const: aer-connect-identity/1, description: "Optional installation-proof capability; old clients remain manual-consent clients" }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -2364,7 +2368,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { type: object, required: [attemptId, ephPub, ciphertext], properties: { attemptId: { type: string }, ephPub: { type: string }, ciphertext: { type: string }, clipboard: { type: [boolean, 'null'] }, files: { type: [boolean, 'null'] }, minutes: { type: integer } } }
+            schema: { type: object, required: [attemptId, ephPub, ciphertext], properties: { attemptId: { type: string }, ephPub: { type: string }, ciphertext: { type: string }, identityProof: { type: string, description: "Optional X25519/HKDF/HMAC installation proof bound to the entire password envelope; never supplies a caller-selected identity or trust flag" }, clipboard: { type: [boolean, 'null'] }, files: { type: [boolean, 'null'] }, minutes: { type: integer } } }
       responses:
         '201':
           description: Created
@@ -2380,6 +2384,69 @@ paths:
         
         '403': { description: "Wrong password, used attempt or incoming sessions disabled" }
         '429': { description: "Too many attempts" }
+  /remote/gw/client/device/trust:
+    get:
+      x-aer-status: implemented
+      summary: "Gateway: receiving installation's own persistent trust policy (never another host's policy)"
+      security: [{ gatewayAuth: [] }]
+      responses:
+        '200':
+          description: "Data envelope containing RemoteDeviceTrust"
+          content:
+            application/json:
+              schema: { allOf: [{ $ref: '#/components/schemas/SuccessEnvelope' }, { type: object, properties: { data: { $ref: '#/components/schemas/RemoteDeviceTrust' } } }] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    put:
+      x-aer-status: implemented
+      summary: "Gateway: enable/disable unattended access on this installation; disabling ends trusted sessions, retains revocations"
+      security: [{ gatewayAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [enabled], properties: { enabled: { type: boolean, default: false } } }
+      responses:
+        '200': { description: "Data envelope containing RemoteDeviceTrust" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/gw/client/device/trust/candidate:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: look up a registered peer's name, number and public-key fingerprint for local owner verification; grants nothing"
+      security: [{ gatewayAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [number], properties: { number: { type: string } } }
+      responses:
+        '200': { description: "Data envelope containing RemoteTrustedDevice" }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/client/device/trust/grant:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: explicit local-owner grant to a registered peer with a matching key fingerprint; does not enable the global switch"
+      security: [{ gatewayAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [number, fingerprint], properties: { number: { type: string }, fingerprint: { type: string } } }
+      responses:
+        '200': { description: "Data envelope containing RemoteDeviceTrust" }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/gw/client/device/trust/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: persist revocation, end all sessions from this peer to this host, invalidate pending tickets; regrant is explicit"
+      security: [{ gatewayAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [number], properties: { number: { type: string } } }
+      responses:
+        '200': { description: "Data envelope containing RemoteDeviceTrust" }
+        '404': { $ref: '#/components/responses/NotFound' }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -2468,6 +2535,21 @@ components:
                 properties:
                   data: { type: array, items: { $ref: '#/components/schemas/RelationKind' } }
   schemas:
+    RemoteDeviceTrust:
+      type: object
+      required: [enabled, devices]
+      properties:
+        enabled: { type: boolean, default: false }
+        devices: { type: array, items: { $ref: '#/components/schemas/RemoteTrustedDevice' } }
+    RemoteTrustedDevice:
+      type: object
+      required: [number, name, fingerprint, revokedAt]
+      properties:
+        number: { type: string, pattern: '^[1-9][0-9]{8}$' }
+        name: { type: string }
+        fingerprint: { type: string, pattern: '^[0-9a-f]{64}$', description: SHA-256 of the registered installation X25519 public key }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
     Meta:
       type: object
       required: [requestId, apiVersion]
@@ -3570,12 +3652,28 @@ components:
         expiresAt: { type: string, format: date-time }
         allowed: { $ref: '#/components/schemas/RemoteCaps' }
         reason: { type: string }
+        auth: { $ref: '#/components/schemas/RemoteConnectAuth' }
+    RemoteConnectAuth:
+      type: object
+      description: "Core to Host only. Policy revision and viewer public key come from authenticated server records, never client input."
+      required: [attemptId, ephPub, ciphertext, viewerNumber, viewerName, targetNumber]
+      properties:
+        attemptId: { type: string }
+        ephPub: { type: string }
+        ciphertext: { type: string }
+        viewerNumber: { type: string }
+        viewerName: { type: string }
+        targetNumber: { type: string }
+        viewerBoxPub: { type: string, description: "Registered installation public key, when an identity proof is present" }
+        identityProof: { type: string }
+        trustRevision: { type: integer, minimum: 0, default: 0, description: "Zero requires local consent. Positive revision is issued only by Core for an enabled, explicitly granted and unrevoked peer." }
     RemoteAgentEvent:
       type: object
       additionalProperties: false
       required: [event]
       properties:
-        event: { type: string, enum: [awaiting_approval, approved, denied, ready, connected, disconnected, closed, failed] }
+        event: { type: string, enum: [awaiting_approval, approved, denied, ready, connected, disconnected, closed, failed, auth_ok, auth_failed] }
+        code: { type: string, description: "Authentication failure code; never a password or credential" }
         password: { type: string, description: only with ready; kept in Core memory until the one-time grant }
         filesToken: { type: string }
         message: { type: string }

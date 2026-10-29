@@ -17,7 +17,7 @@ import (
 )
 
 const sessionCols = `id, entity_id, kind, source_name, source_entity, client_id, transport, state, reason, allowed,
-	created_at, approved_at, ready_at, granted_at, connected_at, ended_at, expires_at, route`
+	created_at, approved_at, ready_at, granted_at, connected_at, ended_at, expires_at, route, trust_revision`
 
 func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	var x Session
@@ -25,7 +25,7 @@ func scanSession(row interface{ Scan(...any) error }) (Session, error) {
 	var created, expires int64
 	var appr, ready, granted, conn, ended sql.NullInt64
 	if err := row.Scan(&x.ID, &x.EntityID, &x.Kind, &x.SourceName, &x.SourceEntity, &x.ClientID, &x.Transport, &st, &x.Reason, &allowed,
-		&created, &appr, &ready, &granted, &conn, &ended, &expires, &x.Route); err != nil {
+		&created, &appr, &ready, &granted, &conn, &ended, &expires, &x.Route, &x.TrustRevision); err != nil {
 		return x, err
 	}
 	x.State = State(st)
@@ -171,6 +171,16 @@ func (s *Service) create(ctx context.Context, in NewSession, key, route string, 
 	if err != nil {
 		return Session{}, err
 	}
+	if in.auth != nil {
+		revision, err := s.trustRevision(ctx, in.ClientID, in.EntityID)
+		if err != nil {
+			return Session{}, err
+		}
+		in.auth.TrustRevision = 0
+		if in.auth.IdentityProof != "" && h.Agent != nil && slices.Contains(h.Agent.Features, remoteengine.FeatureConnectTrust) {
+			in.auth.TrustRevision = revision
+		}
+	}
 	if h.Agent != nil && h.Agent.Backend == "windows-shadow" && route != remoteengine.RouteRelay {
 		return Session{}, &RefusedError{Status: 422, Code: "UNSUPPORTED", Reason: "relay_required", Message: "AER Windows Host доступен через собственный Gateway"}
 	}
@@ -221,10 +231,11 @@ func (s *Service) create(ctx context.Context, in NewSession, key, route string, 
 	authState := ""
 	if in.auth != nil {
 		authState = "required"
+		x.TrustRevision = in.auth.TrustRevision
 	}
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO remote_sessions (id, entity_id, kind, source_name, source_entity, client_id, transport, state,
-		allowed, idempotency_key, created_at, expires_at, route, auth_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt), route, authState); err != nil {
+		allowed, idempotency_key, created_at, expires_at, route, auth_state,trust_revision) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt), route, authState, x.TrustRevision); err != nil {
 		return Session{}, err
 	}
 	if created != nil {
@@ -334,6 +345,9 @@ func (s *Service) Grant(ctx context.Context, id string) (Grant, error) {
 }
 
 func (s *Service) grant(ctx context.Context, x Session) (Grant, error) {
+	if err := s.sessionTrust(ctx, x); err != nil {
+		return Grant{}, err
+	}
 	id := x.ID
 	switch {
 	case x.State.Terminal():
@@ -494,6 +508,9 @@ func (s *Service) OnAgentEvent(ctx context.Context, a monitoring.Agent, id strin
 	}
 	if x.EntityID != a.EntityID {
 		return x, &RefusedError{Status: http.StatusForbidden, Code: "FORBIDDEN", Reason: "foreign", Message: "Сеанс другого хоста"}
+	}
+	if err := s.sessionTrust(ctx, x); err != nil {
+		return x, err
 	}
 	msg := monitoring.Redact(strings.TrimSpace(ev.Message))
 	if len(msg) > 300 {

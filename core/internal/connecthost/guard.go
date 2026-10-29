@@ -41,12 +41,13 @@ type Guard struct {
 	locked    time.Time
 	seen      map[string]time.Time
 	usedTemp  bool
+	trusted   map[string]bool
 }
 
 // NewGuard builds the guard with a fresh temporary password.
 func NewGuard(key *ecdh.PrivateKey, number string, permanent *remoteengine.Verifier, incoming bool) *Guard {
 	g := &Guard{key: key, number: number, now: time.Now, temp: remoteengine.NewTempPassword(), incoming: incoming,
-		seen: map[string]time.Time{}}
+		seen: map[string]time.Time{}, trusted: map[string]bool{}}
 	if permanent != nil && permanent.Valid() {
 		p := *permanent
 		g.permanent = &p
@@ -61,6 +62,7 @@ func (g *Guard) Verify(a remoteengine.ConnectAuth) (bool, string) {
 	for k, t := range g.seen {
 		if now.Sub(t) > seenKeep {
 			delete(g.seen, k)
+			delete(g.trusted, k)
 		}
 	}
 	switch {
@@ -83,6 +85,11 @@ func (g *Guard) Verify(a remoteengine.ConnectAuth) (bool, string) {
 	g.mu.Unlock()
 
 	password, err := remoteengine.OpenPassword(g.key, a, now, sealMaxAge)
+	if a.IdentityProof != "" || a.TrustRevision != 0 {
+		if proofErr := remoteengine.VerifyIdentity(g.key, a); proofErr != nil {
+			err = proofErr
+		}
+	}
 	tempOK := err == nil && subtle.ConstantTimeCompare([]byte(password), []byte(temp)) == 1
 	permOK := false
 	if perm != nil {
@@ -92,6 +99,7 @@ func (g *Guard) Verify(a remoteengine.ConnectAuth) (bool, string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if tempOK || permOK {
+		g.trusted[a.AttemptID] = a.TrustRevision > 0
 		g.fails = nil
 		if tempOK {
 			g.usedTemp = true // a new temporary password after this session
@@ -107,6 +115,22 @@ func (g *Guard) Verify(a remoteengine.ConnectAuth) (bool, string) {
 		return false, remoteengine.AuthMalformed
 	}
 	return false, remoteengine.AuthBadPassword
+}
+
+// Called only after Verify accepted the password. Core supplies the policy
+// revision; the host independently verifies installation-key possession.
+func (g *Guard) SkipApproval(a remoteengine.ConnectAuth) bool {
+	g.mu.Lock()
+	approved := g.trusted[a.AttemptID] && g.incoming && !g.now().Before(g.locked)
+	delete(g.trusted, a.AttemptID)
+	g.mu.Unlock()
+	return approved && a.TrustRevision > 0 && remoteengine.VerifyIdentity(g.key, a) == nil
+}
+
+func (g *Guard) CanOpen() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.incoming && !g.now().Before(g.locked)
 }
 
 // Rotate replaces the temporary password and returns the new one.

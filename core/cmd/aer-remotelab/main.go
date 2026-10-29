@@ -274,6 +274,8 @@ func run() error {
 		}
 		defer func() { d.stdin.Close(); <-d.done }()
 		result["enrollCode"], result["deviceNumber"], result["devicePasswordFile"] = d.enrollCode, d.number, d.passwordFile
+		// TEST ONLY: owner of the synthetic receiving device can configure trust.
+		result["deviceClientCredential"], result["devicePromptsFile"] = d.clientCredential, d.promptsFile
 	}
 	out, _ := json.Marshal(result)
 	w := bufio.NewWriter(os.Stdout)

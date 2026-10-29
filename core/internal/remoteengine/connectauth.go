@@ -35,12 +35,16 @@ const FeatureConnectAuth = "connect-auth/1"
 
 // ConnectAuth travels Core → host agent inside an "open" command.
 type ConnectAuth struct {
-	AttemptID    string `json:"attemptId"`
-	EphPub       string `json:"ephPub"`     // base64url, 32 bytes
-	Ciphertext   string `json:"ciphertext"` // base64url AES-256-GCM
-	ViewerNumber string `json:"viewerNumber"`
-	ViewerName   string `json:"viewerName"`
-	TargetNumber string `json:"targetNumber"`
+	AttemptID     string `json:"attemptId"`
+	EphPub        string `json:"ephPub"`     // base64url, 32 bytes
+	Ciphertext    string `json:"ciphertext"` // base64url AES-256-GCM
+	ViewerNumber  string `json:"viewerNumber"`
+	ViewerName    string `json:"viewerName"`
+	TargetNumber  string `json:"targetNumber"`
+	ViewerBoxPub  string `json:"viewerBoxPub,omitempty"`
+	IdentityProof string `json:"identityProof,omitempty"`
+	// Only Core sets this after consulting the receiving device's trust policy.
+	TrustRevision int64 `json:"trustRevision,omitempty"`
 }
 
 // Auth failure codes a host reports (AgentEvent.Code).

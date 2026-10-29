@@ -53,6 +53,11 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/gw/info", m.gwInfo, gw)
 	r.Handle(http.MethodPost, "/remote/gw/devices/enroll", m.gwEnroll, gw)
 	r.Handle(http.MethodGet, "/remote/gw/client/device", m.gwDevice, gw)
+	r.Handle(http.MethodGet, "/remote/gw/client/device/trust", m.gwTrust, gw)
+	r.Handle(http.MethodPut, "/remote/gw/client/device/trust", m.gwTrustEnabled, gw)
+	r.Handle(http.MethodPost, "/remote/gw/client/device/trust/candidate", m.gwTrustCandidate, gw)
+	r.Handle(http.MethodPost, "/remote/gw/client/device/trust/grant", m.gwTrustGrant, gw)
+	r.Handle(http.MethodPost, "/remote/gw/client/device/trust/revoke", m.gwTrustRevoke, gw)
 	r.Handle(http.MethodPost, "/remote/gw/client/connect/challenge", m.gwChallenge, gw)
 	r.Handle(http.MethodPost, "/remote/gw/client/connect", m.gwConnect, gw)
 }
