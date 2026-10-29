@@ -551,6 +551,7 @@ func (s *Service) OnAgentEvent(ctx context.Context, a monitoring.Agent, id strin
 // Sweep enforces timeouts; called every couple of seconds by Run.
 func (s *Service) Sweep(ctx context.Context) {
 	now := s.now()
+	s.forgetStale(now)
 	cutoff := func(sec int) int64 { return ms(now.Add(-time.Duration(sec) * time.Second)) }
 	type rule struct {
 		where string

@@ -646,3 +646,20 @@ func (s *Service) authPending(ctx context.Context, id string) bool {
 	_ = s.db.QueryRowContext(ctx, `SELECT auth_state FROM remote_sessions WHERE id = ?`, id).Scan(&state)
 	return state == "required" || state == "failed"
 }
+
+// forgetStale drops expired attempts and failure counters that neither lock
+// nor count any more, so memory stays bounded by recent activity.
+func (s *Service) forgetStale(now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for k, a := range s.attempts {
+		if now.After(a.expires) {
+			delete(s.attempts, k)
+		}
+	}
+	for k, f := range s.fails {
+		if !now.Before(f.locked) && (len(f.times) == 0 || now.Sub(f.times[len(f.times)-1]) > failWindow) {
+			delete(s.fails, k)
+		}
+	}
+}

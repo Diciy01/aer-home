@@ -396,3 +396,22 @@ func TestParallelConnectsOneSessionWins(t *testing.T) {
 		t.Fatalf("won %d busy %d", won, busy)
 	}
 }
+
+func TestStaleCountersAndAttemptsAreForgotten(t *testing.T) {
+	f := newFx(t)
+	code, _ := f.svc.CreateEnrollment(f.ctx, EnrollmentInput{Name: "тест", MaxUses: 5})
+	host, viewer := f.enroll(t, code.Code, "ПК", 1), f.enroll(t, code.Code, "Ноутбук", 2)
+	f.online(t, host, 1)
+	if _, err := f.try(t, viewer, host, "guess"); !refused(err, "bad_password") {
+		t.Fatal(err)
+	}
+	_, _ = f.svc.Challenge(f.ctx, viewer.cli, host.e.Number) // left open
+	f.clk.add(failWindow + time.Minute)
+	f.svc.Sweep(f.ctx)
+	f.svc.mu.Lock()
+	n, a := len(f.svc.fails), len(f.svc.attempts)
+	f.svc.mu.Unlock()
+	if n != 0 || a != 0 {
+		t.Fatalf("kept %d counters and %d attempts", n, a)
+	}
+}
