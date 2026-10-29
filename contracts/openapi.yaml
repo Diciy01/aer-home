@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.11.0
+  version: 0.11.1
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -3166,7 +3166,7 @@ components:
         osVersion: { type: string }
         hostname: { type: string }
         version: { type: string }
-        backend: { type: string, enum: [gnome-rdp, windows-rdp] }
+        backend: { type: string, enum: [gnome-rdp, windows-rdp, windows-shadow] }
         transport: { type: string, enum: [rdp] }
         address: { type: string, description: address the client connects to (LAN/VPN) }
         port: { type: integer }

@@ -1,0 +1,22 @@
+{
+  "coreUrl": "https://gateway.example.net:8443/gw/v1/agent",
+  "coreCertSha256": "ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab",
+  "gatewayUrl": "https://gateway.example.net:8443",
+  "gatewayCertSha256": "ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab:ab",
+  "tokenFile": "C:\\Users\\USER\\AppData\\Local\\aer-home\\remote-host.token",
+  "stateDir": "C:\\Users\\USER\\AppData\\Local\\aer-home\\remote-host",
+  "backend": "windows-shadow",
+  "shadowExecutable": "C:\\Users\\USER\\AppData\\Local\\Programs\\AER Windows Host\\aer-shadow.exe",
+  "shadowSource": "desktop",
+  "shadowViewOnly": true,
+  "address": "127.0.0.1",
+  "port": 33389,
+  "approval": "prompt",
+  "clipboard": false,
+  "files": {
+    "enabled": false,
+    "dir": "C:\\Users\\USER\\AER Remote",
+    "port": 33390,
+    "maxBytes": 2147483648
+  }
+}

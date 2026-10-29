@@ -23,6 +23,11 @@ type Config struct {
 	// Backend: gnome-rdp (gnome-remote-desktop through grdctl) or
 	// windows-rdp (built-in RDP; readiness only, OS account credentials).
 	Backend string `json:"backend"`
+	// ShadowExecutable is the app-local aer-shadow.exe (never Windows RDP).
+	ShadowExecutable string `json:"shadowExecutable"`
+	// ShadowSource: desktop, or explicitly synthetic for isolated tests only.
+	ShadowSource   string `json:"shadowSource"`
+	ShadowViewOnly bool   `json:"shadowViewOnly"`
 	// Grdctl is the argv prefix for grdctl, e.g. ["grdctl"] or
 	// ["grdctl","--headless"] for a headless GNOME session.
 	Grdctl []string `json:"grdctl"`
@@ -87,8 +92,19 @@ func (c Config) Validate() error {
 	if !filepath.IsAbs(c.TokenFile) || !filepath.IsAbs(c.StateDir) {
 		errs = append(errs, errors.New("tokenFile and stateDir: absolute paths"))
 	}
-	if c.Backend != "gnome-rdp" && c.Backend != "windows-rdp" {
-		errs = append(errs, errors.New("backend: gnome-rdp or windows-rdp"))
+	if c.Backend != "gnome-rdp" && c.Backend != "windows-rdp" && c.Backend != "windows-shadow" {
+		errs = append(errs, errors.New("backend: gnome-rdp, windows-rdp or windows-shadow"))
+	}
+	if c.Backend == "windows-shadow" {
+		if !filepath.IsAbs(c.ShadowExecutable) || c.Address != "127.0.0.1" || c.Approval != "prompt" || c.GatewayURL == "" {
+			errs = append(errs, errors.New("windows-shadow: absolute shadowExecutable, loopback address, prompt approval and Gateway required"))
+		}
+		if c.ShadowSource != "desktop" && c.ShadowSource != "synthetic" {
+			errs = append(errs, errors.New("shadowSource: desktop or synthetic (test only)"))
+		}
+		if c.TLSCert != "" || c.TLSKey != "" {
+			errs = append(errs, errors.New("windows-shadow generates private per-session TLS certificates"))
+		}
 	}
 	if c.Backend == "gnome-rdp" && (len(c.Grdctl) == 0 || len(c.Daemon) == 0 || !filepath.IsAbs(c.Daemon[0])) {
 		errs = append(errs, errors.New("grdctl and daemon (absolute path): the agent runs gnome-remote-desktop per session"))
@@ -99,7 +115,7 @@ func (c Config) Validate() error {
 	if c.Approval != "auto" && c.Approval != "prompt" {
 		errs = append(errs, errors.New("approval: auto or prompt"))
 	}
-	if c.Approval == "prompt" && len(c.PromptCommand) == 0 {
+	if c.Approval == "prompt" && len(c.PromptCommand) == 0 && c.Backend != "windows-shadow" {
 		errs = append(errs, errors.New("promptCommand required for approval=prompt"))
 	}
 	if c.GatewayURL != "" {

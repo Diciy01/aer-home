@@ -58,7 +58,13 @@ func New(cfg Config, log *slog.Logger) (*Agent, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	cert, err := EnsureCert(&cfg)
+	var cert string
+	var err error
+	if cfg.Backend == "windows-shadow" {
+		cert, err = shadowPresenceCert(cfg)
+	} else {
+		cert, err = EnsureCert(&cfg)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("tls certificate: %w", err)
 	}
@@ -70,6 +76,11 @@ func New(cfg Config, log *slog.Logger) (*Agent, error) {
 		a.http.Transport = tr
 	}
 	switch cfg.Backend {
+	case "windows-shadow":
+		a.backend, err = newShadowBackend(cfg)
+		if err != nil {
+			return nil, err
+		}
 	case "windows-rdp":
 		a.backend = &windowsBackend{c: cfg}
 	default:
@@ -79,6 +90,11 @@ func New(cfg Config, log *slog.Logger) (*Agent, error) {
 		a.files = NewFileServer(cfg.Files.Dir, cfg.Files.MaxBytes)
 	}
 	a.Prompt = a.commandPrompt
+	if prompt, ok := a.backend.(interface {
+		Prompt(context.Context, string) bool
+	}); ok {
+		a.Prompt = prompt.Prompt
+	}
 	a.Connections = func() int { return established(cfg.Port) }
 	return a, nil
 }
@@ -154,10 +170,13 @@ func (a *Agent) Hello(ctx context.Context) error {
 	ready, reason := a.backend.Ready(ctx)
 	managed := a.cfg.Backend != "windows-rdp"
 	host, _ := os.Hostname()
+	a.mu.Lock()
+	certPEM := a.certPEM
+	a.mu.Unlock()
 	body := map[string]any{
 		"os": runtime.GOOS, "hostname": host, "version": Version, "backend": a.cfg.Backend,
-		"address": a.cfg.Address, "port": a.cfg.Port, "certPem": a.certPEM, "monitors": 1,
-		"capabilities": map[string]bool{"desktop": managed, "input": managed, "clipboard": managed && a.cfg.Clipboard,
+		"address": a.cfg.Address, "port": a.cfg.Port, "certPem": certPEM, "monitors": 1,
+		"capabilities": map[string]bool{"desktop": managed, "input": managed && !(a.cfg.Backend == "windows-shadow" && a.cfg.ShadowViewOnly), "clipboard": managed && a.cfg.Clipboard,
 			"files": managed && a.cfg.Files.Enabled, "apps": false},
 		"approval": a.cfg.Approval, "ready": ready, "reason": reason, "username": a.backend.Username(),
 	}
@@ -227,17 +246,56 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	}
 	if a.cfg.Approval == "prompt" {
 		a.event(ctx, c.SessionID, remoteengine.EventAwaitingApproval, "", nil)
-		if !a.Prompt(ctx, "Разрешить удалённое подключение AER HOME к этому компьютеру?") {
+		prompt := "Разрешить удалённое подключение AER HOME к этому компьютеру?"
+		if a.cfg.Backend == "windows-shadow" {
+			prompt = fmt.Sprintf("Разрешить один сеанс AER HOME?\n\nПросмотр экрана: да\nМышь и клавиатура: %s\nТекстовый буфер: %s\nПапка обмена файлами: %s\n\nПостоянный доступ не предоставляется. Закройте окно активного доступа, чтобы немедленно завершить сеанс. Блокировка Windows и защищённый экран UAC завершают доступ.", permissionLabel(c.Allowed.Input), permissionLabel(c.Allowed.Clipboard && a.cfg.Clipboard), permissionLabel(c.Allowed.Files && a.cfg.Files.Enabled))
+		}
+		if !a.Prompt(ctx, prompt) {
 			a.event(ctx, c.SessionID, remoteengine.EventDenied, "Пользователь компьютера отклонил подключение", nil)
 			return
 		}
 	}
-	a.event(ctx, c.SessionID, remoteengine.EventApproved, "", nil)
+	if a.cfg.Backend == "windows-shadow" {
+		// Approval may have taken up to 90 seconds: do not start capture for
+		// a session that was cancelled/revoked while the user was deciding.
+		var current struct {
+			State remoteengine.State `json:"state"`
+		}
+		err := a.call(ctx, http.MethodPost, "/remote/agent/sessions/"+c.SessionID+"/events", map[string]string{"event": remoteengine.EventApproved}, &current)
+		if err != nil || (current.State != remoteengine.StatePending && current.State != remoteengine.StateAwaitingApproval) {
+			return
+		}
+	} else {
+		a.event(ctx, c.SessionID, remoteengine.EventApproved, "", nil)
+	}
 	pass := newPassword()
-	if err := a.backend.Open(ctx, a.backend.Username(), pass); err != nil {
+	var openErr error
+	if backend, ok := a.backend.(interface {
+		OpenSession(context.Context, string, string, Command) error
+	}); ok {
+		openErr = backend.OpenSession(ctx, a.backend.Username(), pass, c)
+	} else {
+		openErr = a.backend.Open(ctx, a.backend.Username(), pass)
+	}
+	if openErr != nil {
 		_ = a.backend.Close(ctx)
-		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось включить RDP: "+err.Error(), nil)
+		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось включить RDP: "+openErr.Error(), nil)
 		return
+	}
+	cert, key := a.cfg.TLSCert, a.cfg.TLSKey
+	if backend, ok := a.backend.(interface {
+		SessionTLS() (string, string, string)
+	}); ok {
+		var pem string
+		cert, key, pem = backend.SessionTLS()
+		a.mu.Lock()
+		a.certPEM = pem
+		a.mu.Unlock()
+		if err := a.Hello(ctx); err != nil {
+			_ = a.backend.Close(ctx)
+			a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось закрепить сертификат нового сеанса", nil)
+			return
+		}
 	}
 	extra := map[string]string{"password": pass}
 	if a.cfg.Backend == "windows-rdp" {
@@ -249,7 +307,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		if c.Relay {
 			bind = "127.0.0.1" // relay: only the agent's own legs reach it
 		}
-		if err := a.files.Start(net.JoinHostPort(bind, strconv.Itoa(a.cfg.Files.Port)), a.cfg.TLSCert, a.cfg.TLSKey, tok); err != nil {
+		if err := a.files.Start(net.JoinHostPort(bind, strconv.Itoa(a.cfg.Files.Port)), cert, key, tok); err != nil {
 			a.log.Warn("file channel", "err", err)
 		} else if extra != nil {
 			extra["filesToken"] = tok
@@ -270,6 +328,13 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	}
 }
 
+func permissionLabel(allowed bool) string {
+	if allowed {
+		return "да"
+	}
+	return "нет"
+}
+
 // watch reports real connects/disconnects and ends the session at its
 // expiry — also when Core is unreachable (agent-side enforcement).
 func (a *Agent) watch(ctx context.Context, s *openSession) {
@@ -280,6 +345,10 @@ func (a *Agent) watch(ctx context.Context, s *openSession) {
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
+			if backend, ok := a.backend.(interface{ Alive() bool }); ok && !backend.Alive() {
+				a.closeSession(context.Background(), s.id, "Удалённый доступ остановлен локально, защищённым экраном или ошибкой захвата")
+				return
+			}
 			if now.After(s.expiresAt) {
 				a.closeSession(context.Background(), s.id, "Истёк срок сеанса (агент хоста)")
 				return

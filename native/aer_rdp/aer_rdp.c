@@ -618,6 +618,9 @@ int aer_rdp_connect(AerRdp* r, const char* host, int port, const char* user, con
 	          freerdp_settings_set_uint32(s, FreeRDP_ServerPort, (UINT32)port) &&
 	          freerdp_settings_set_string(s, FreeRDP_Username, user ? user : "") &&
 	          freerdp_settings_set_string(s, FreeRDP_Password, password ? password : "") &&
+	          /* The managed TLS server authenticates the per-session account
+	           * before exposing frames (no Windows account/NLA required). */
+	          freerdp_settings_set_bool(s, FreeRDP_AutoLogonEnabled, TRUE) &&
 	          freerdp_settings_set_uint32(s, FreeRDP_DesktopWidth, (UINT32)width) &&
 	          freerdp_settings_set_uint32(s, FreeRDP_DesktopHeight, (UINT32)height) &&
 	          freerdp_settings_set_uint32(s, FreeRDP_ColorDepth, 32) &&

@@ -49,13 +49,20 @@ func main() {
 }
 
 var (
-	realRDP = flag.String("rdp", "", "use this REAL RDP server on loopback (127.0.0.1:port) instead of the fake one")
-	rdpCert = flag.String("rdp-cert", "", "with -rdp: the server's certificate (PEM), pinned by the agent")
-	rdpKey  = flag.String("rdp-key", "", "with -rdp: the server's key (PEM), for the agent's file channel")
+	realRDP     = flag.String("rdp", "", "use this REAL RDP server on loopback (127.0.0.1:port) instead of the fake one")
+	rdpCert     = flag.String("rdp-cert", "", "with -rdp: the server's certificate (PEM), pinned by the agent")
+	rdpKey      = flag.String("rdp-key", "", "with -rdp: the server's key (PEM), for the agent's file channel")
+	shadow      = flag.String("shadow", "", "app-local aer-shadow.exe with SYNTHETIC frames only; never capture or inject input")
+	viewOnly    = flag.Bool("shadow-view-only", false, "synthetic host: deny input")
+	noClipboard = flag.Bool("no-clipboard", false, "deny host clipboard")
+	noFiles     = flag.Bool("no-files", false, "deny host files")
 )
 
 func run() error {
 	flag.Parse()
+	if *shadow != "" && *realRDP != "" {
+		return errors.New("choose -shadow synthetic or -rdp")
+	}
 	if (*realRDP != "") != (*rdpCert != "" && *rdpKey != "") {
 		return errors.New("-rdp needs -rdp-cert and -rdp-key")
 	}
@@ -159,6 +166,13 @@ func run() error {
 		if rdpPort, err = strconv.Atoi(p); err != nil {
 			return fmt.Errorf("-rdp: %w", err)
 		}
+	} else if *shadow != "" {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return err
+		}
+		rdpPort = ln.Addr().(*net.TCPAddr).Port
+		ln.Close()
 	} else {
 		rdp, err := net.Listen("tcp", "127.0.0.1:0")
 		if err != nil {
@@ -194,16 +208,27 @@ func run() error {
 		RDPUser: "aer", Approval: "auto", Clipboard: true, TLSCert: *rdpCert, TLSKey: *rdpKey,
 		Files:      remotehost.Files{Enabled: true, Dir: filepath.Join(dir, "exchange"), Port: filesPort, MaxBytes: 1 << 20},
 		GatewayURL: gwURL, GatewayCertSHA256: fp}
+	if *shadow != "" {
+		acfg.Backend, acfg.ShadowExecutable, acfg.ShadowSource, acfg.Address, acfg.Approval = "windows-shadow", *shadow, "synthetic", "127.0.0.1", "prompt"
+		acfg.ShadowViewOnly = *viewOnly
+	}
+	acfg.Clipboard = !*noClipboard
+	acfg.Files.Enabled = !*noFiles
 	a, err := remotehost.New(acfg, quiet)
 	if err != nil {
 		return err
 	}
 	a.SetRunner(func(context.Context, []string) ([]byte, error) { return []byte("RDP:\n\tStatus: disabled\n"), nil },
 		func([]string) (func(), error) { return func() {}, nil })
-	if *realRDP == "" {
+	if *shadow != "" {
+		a.Prompt = func(context.Context, string) bool { return true }
+	} // explicit test-only synthetic source
+	if *realRDP == "" && *shadow == "" {
 		a.Connections = func() int { return int(live.Load()) }
 	} // else: the agent counts real connections to the port (Linux/Windows)
-	go func() { _ = a.Run(ctx) }()
+	agentDone := make(chan struct{})
+	go func() { defer close(agentDone); _ = a.Run(ctx) }()
+	defer func() { stop(); <-agentDone }()
 
 	var pair struct {
 		Code   string

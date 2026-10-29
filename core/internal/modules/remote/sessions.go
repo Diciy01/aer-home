@@ -167,6 +167,9 @@ func (s *Service) create(ctx context.Context, in NewSession, key, route string, 
 	if err != nil {
 		return Session{}, err
 	}
+	if h.Agent != nil && h.Agent.Backend == "windows-shadow" && route != remoteengine.RouteRelay {
+		return Session{}, &RefusedError{Status: 422, Code: "UNSUPPORTED", Reason: "relay_required", Message: "AER Windows Host доступен через собственный Gateway"}
+	}
 	if !h.CanConnect {
 		code, reason := "UNAVAILABLE", "not_ready"
 		if h.ActiveSession != nil {
@@ -363,8 +366,8 @@ func (s *Service) grant(ctx context.Context, x Session) (Grant, error) {
 // still considers active, so an agent closes anything else it holds.
 func (s *Service) Hello(ctx context.Context, a monitoring.Agent, info HostInfo) (map[string]any, error) {
 	v := map[string]string{}
-	if info.Backend != "gnome-rdp" && info.Backend != "windows-rdp" {
-		v["backend"] = "gnome-rdp или windows-rdp"
+	if info.Backend != "gnome-rdp" && info.Backend != "windows-rdp" && info.Backend != "windows-shadow" {
+		v["backend"] = "gnome-rdp, windows-rdp или windows-shadow"
 	}
 	if info.Port < 1 || info.Port > 65535 || strings.TrimSpace(info.Address) == "" || len(info.Address) > 253 {
 		v["address"] = "Адрес и порт RDP, по которым клиент подключается"
@@ -372,13 +375,16 @@ func (s *Service) Hello(ctx context.Context, a monitoring.Agent, info HostInfo) 
 	if info.Approval != "auto" && info.Approval != "prompt" {
 		v["approval"] = "auto или prompt"
 	}
+	if info.Backend == "windows-shadow" && (info.Approval != "prompt" || info.Address != "127.0.0.1") {
+		v["backend"] = "windows-shadow: только loopback и локальное подтверждение каждого сеанса"
+	}
 	fp := ""
 	if info.CertPEM != "" {
 		var err error
 		if fp, err = CertFingerprint(info.CertPEM); err != nil {
 			v["certPem"] = "Сертификат TLS в PEM"
 		}
-	} else if info.Backend == "gnome-rdp" {
+	} else if info.Backend == "gnome-rdp" || info.Backend == "windows-shadow" {
 		v["certPem"] = "Хост GNOME обязан сообщить сертификат для закрепления"
 	}
 	if len(info.Reason) > 300 || len(info.Username) > 64 || len(info.CertPEM) > 16<<10 {
@@ -482,7 +488,7 @@ func (s *Service) OnAgentEvent(ctx context.Context, a monitoring.Agent, id strin
 			return x, nil
 		}
 		if ev.Password == "" && x.Transport == "rdp" {
-			if row, _ := s.hostRow(ctx, a.EntityID); row != nil && row.info.Backend == "gnome-rdp" {
+			if row, _ := s.hostRow(ctx, a.EntityID); row != nil && (row.info.Backend == "gnome-rdp" || row.info.Backend == "windows-shadow") {
 				return x, &ValidationError{Fields: map[string]string{"password": "Нужен пароль сеанса"}}
 			}
 		}

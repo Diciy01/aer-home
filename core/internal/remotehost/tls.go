@@ -16,6 +16,10 @@ import (
 // self-signed RSA pair in stateDir when none is configured. Clients do not
 // trust it blindly: they pin it through Core.
 func EnsureCert(c *Config) (certPEM string, err error) {
+	return ensureCertUntil(c, time.Time{})
+}
+
+func ensureCertUntil(c *Config, expires time.Time) (certPEM string, err error) {
 	if c.TLSCert == "" {
 		c.TLSCert, c.TLSKey = filepath.Join(c.StateDir, "rdp-tls.crt"), filepath.Join(c.StateDir, "rdp-tls.key")
 		if _, err := os.Stat(c.TLSCert); os.IsNotExist(err) {
@@ -30,6 +34,9 @@ func EnsureCert(c *Config) (certPEM string, err error) {
 			tpl := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: "AER Remote " + host},
 				NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().AddDate(2, 0, 0),
 				KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}
+			if !expires.IsZero() {
+				tpl.NotAfter = expires
+			}
 			der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &key.PublicKey, key)
 			if err != nil {
 				return "", err
