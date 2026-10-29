@@ -5,7 +5,9 @@
 ## Компоненты в репозитории
 
 Обновление M14.4 от 2026-10-29: AER Connect и код Windows Host реализованы,
-но реальная DXGI/SendInput-приёмка ещё BLOCKED до отдельного согласия.
+ограниченная живая DXGI/SendInput-приёмка Windows 11 Pro с отдельным согласием
+прошла через собственный Gateway: кадры, ввод в тестовом окне, отзыв и Stop.
+Windows Home, OS clipboard и другие расширенные сценарии ещё UNVERIFIED.
 Результаты synthetic RDP, сборок, установщика и исправления CRT —
 `M14_4_REPORT.md`; инструкция хоста — `WINDOWS_HOST.md`.
 
@@ -17,7 +19,7 @@
 | `core/internal/remotehost/relay.go` | ноги ретрансляции агента хоста |
 | `packages/aer_remote` | общий движок (Dart) для AER HOME и AER Connect |
 | `apps/connect`, `packages/aer_widgets` | самостоятельный Windows-клиент, DPAPI-профиль и общие неизменённые визуальные компоненты AER HOME |
-| `native/aer_shadow`, Windows `remotehost` backend | управляемый Host поверх FreeRDP server/shadow, собственные DXGI/SendInput; реальная desktop-приёмка ещё BLOCKED |
+| `native/aer_shadow`, Windows `remotehost` backend | управляемый Host поверх FreeRDP server/shadow, собственные DXGI/SendInput; ограниченная живая приёмка Windows 11 Pro PASS, полная матрица UNVERIFIED |
 | `core/cmd/aer-remotelab` | изолированный Core + Gateway + агент, только 127.0.0.1; fake RDP, loopback sample или `-shadow` с настоящим RDP и исключительно SYNTHETIC источником |
 | `deploy/remote-gateway.example.json` | пример конфигурации Gateway |
 

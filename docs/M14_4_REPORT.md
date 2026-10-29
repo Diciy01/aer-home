@@ -1,6 +1,10 @@
 # M14.4 — AER Connect и управляемый Windows Host
 
-Статус: **IN_PROGRESS**. Реальный захват и ввод требуют отдельного согласия владельца. Ни стенд, ни сборка не заменяют эту приёмку.
+Статус: **IN_PROGRESS; ограниченная живая приёмка Windows 11 Pro — PASS**.
+Владелец отдельно разрешил текущий desktop и ввод только в безопасное окно.
+2026-10-29 подтверждены настоящие DXGI/SendInput, AER Connect через Gateway,
+отзыв и видимая кнопка Stop. Полная матрица Windows Home/clipboard/files/
+secure desktop/реальной сети остаётся UNVERIFIED; synthetic не заменяет её.
 
 ## Правила интерфейса до реализации
 
@@ -84,7 +88,7 @@ FFI-соединения. Проверки CRT остаются включённ
 | Files pin trusted/untrusted CA | PASS: правильный и неправильный pin для обоих вариантов, HTTP/redirect refusal, SHA/transfer/имена; `apps/desktop/test/remote/files_client_tls_test.dart` |
 | Connect установка / запуск без SDK в PATH / удаление | PASS: новый каталог, PATH=System32, package-local DLL, `--no-profile`, exit 0; сохранены добавленный файл и изменённая лицензия, удалён неизменённый EXE; `codex-m144-connect-package-smoke.log`, `codex-m144-connect-uninstall.log` |
 | Start Menu shortcut | PASS: отдельная установка создала собственный ярлык, uninstaller удалил его по целевому пути; чужой ярлык не перезаписывался |
-| Настоящие DXGI и SendInput | BLOCKED до отдельного согласия и запуска Host обычным пользователем. `--probe` текущего elevated-контекста возвращает 3, как предусмотрено защитой |
+| Настоящие DXGI и SendInput | PASS в ограниченной живой приёмке Windows 11 Pro: ordinary-user Host через Explorer, первичный монитор 1920×1080, проверенное тестовое окно; подробности ниже. Elevated Host по-прежнему отвергается |
 | Windows Home физически / чистая VM / второй ПК / интернет | UNVERIFIED |
 | Linux native runtime после этих изменений | UNVERIFIED: Linux/WSL недоступны; cross-build не заменяет runtime |
 
@@ -118,11 +122,14 @@ SendInput и системный clipboard. Тестовые clipboard handlers �
   файлы/жизненный цикл клиента и пользовательская упаковка.
 - `b04f0d4` — защита файлового сервера от выхода из каталога и перезаписи.
 - `10a3c1b` — Windows Host, контракт, native helper и синтетическая приёмка.
+- `bd12743` — обязательные видимые consent/Stop, отказ при невозможности
+  показать Stop, безопасный opt-in стенд и регрессия живой приёмки.
 
 | Пакет | Размер / SHA-256 |
 |---|---|
 | `E:/dev/temp/aer-connect-m144-20261029.zip` | 16 355 160 байт; `55F9272D0F1CED77D4ABA202DB101FCB5103E6BC91F7CBE2726CEB1EEF0B3EC2` |
-| `E:/dev/temp/aer-windows-host-m144-20261029.zip` | 11 249 374 байт; `90669E358722541E3687CC4A73BF77E28C4401078C604FA9FC45883C022B3FE1` |
+| `E:/dev/temp/aer-windows-host-m144-20261029.zip` | **SUPERSEDED — не использовать**: версия до исправления видимости Stop; сохранена для трассировки, новый пакет указан в живой приёмке ниже |
+| **Актуальный Host** `E:/dev/temp/aer-windows-host-m144-live-20261029.zip` | 11 249 846 байт; SHA-256 `78A8D4F0784155DEFD42BE700D72E12E8D3758F61625618E48AE65046E3AF396` |
 
 Инструменты разработчика: Go 1.27.3, Flutter 3.47.7 / Dart 3.13.5,
 MSVC 14.44.35207, Windows SDK 10.0.26100, FreeRDP 3.32.2 (vcpkg x64-windows).
@@ -133,19 +140,93 @@ SDK/vcpkg используются при сборке, но не требуют
 token/key-файлов или каталогов тестов. Это ограниченная проверка артефактов,
 не замена полного аудита безопасности.
 
-## Обязательная оставшаяся приёмка M14.4
+## Ограниченная живая приёмка (2026-10-29)
 
-1. Отдельное согласие владельца на реальный захват и ввод; Host запустить
-   обычным пользователем, без повышения прав. Не ослаблять token/desktop guards.
-2. На localhost проверить реальные DXGI-кадры, мышь/клавиши/Unicode только в
-   отдельном тестовом окне, view-only, clipboard в обе стороны, файлы,
-   видимое согласие и Stop, отзыв и повторное соединение.
-3. С отдельно согласованным безопасным сценарием проверить lock/UAC/access-lost,
-   отсутствие продолжения после смены desktop и освобождение ресурсов.
-4. Windows Home и чистая Windows без SDK, производительность/масштабирование;
-   второй физический ПК и реальная сеть — отдельно от текущего loopback.
+Windows 11 Pro, build 26300. Host — Release, AER Connect — настоящее Flutter
+Debug-приложение с FreeRDP DLL. Core/Gateway/агент работают в отдельном временном
+каталоге; пользовательский Core не используется. Fixture и Host запущены
+через существующий Explorer с обычным токеном; elevation проверяется до запуска
+стенда и у native child. Права ОС не менялись и elevated guard не обходился.
+Каждый захват начинался после ручного подтверждения production-диалога.
 
-Пока эти проверки не пройдены, Windows Host не объявляется готовым, M14.4
-остаётся **IN_PROGRESS**, а не DONE. M11 остаётся CANCELLED; M13/Android/editor
-не начинались. Системные службы, драйверы, Firewall и RDP не менялись.
-Push не выполнялся.
+`apps/connect/integration_test/windows_desktop_acceptance_test.dart` проверяет
+два цветных маркера собственного окна в настоящем DXGI/RDP кадре и факт
+отрисовки Flutter viewer. Full desktop pixels нигде не сохраняются.
+Clipboard/files принудительно отключены, тестовый профиль только в памяти.
+Перед вводом сверяются свежесть status, границы первичного монитора,
+`WindowFromPoint` и foreground тестового окна для клавиатуры.
+
+| Сценарий | Подтверждённый результат |
+|---|---|
+| Изображение, SendInput, отзыв | **PASS**, `codex-m144-desktop-revoke-5.log`: настоящие DXGI-маркеры в Connect, один remote click и клавиша A (scan 0x1e, VK 65) получены тестовым окном. Не подтверждает кириллицу/Unicode. Route=relay, 4 980 756 байт вниз / 4 865 вверх через локальный forwarder/Gateway. Viewer и native helper отсутствуют через 486 мс после запроса отзыва по опросу теста |
+| Видимый Stop | **PASS**, `codex-m144-desktop-stop-3.log`: на финальной сборке подтверждены реальный кадр и видимый/enabled production Stop; `BM_CLICK` своей кнопке завершил сеанс и native helper за 1347 мс по опросу. Повторный remote input в этом сценарии не отправлялся |
+| Loopback | **PASS**: `Get-NetTCPConnection` для собственного Core/Gateway/Host показал только 127.0.0.1; локальный клиентский forwarder также loopback. Snapshot listener сохраняется в `network.json` |
+| Обычные права | **PASS**: fixture/агент и все session children без elevation. Системный RDP/NLA не используется |
+| Завершение | **PASS**: оба `closed.json` содержат labExited=true, exitCode=0; после завершения нет fixture/Host/Connect/стендовых Core/Gateway и принадлежащих им listener. Посторонние процессы не останавливались |
+| Стиль | **PASS**: frontend продукта не изменён этим исправлением; повторно совпало содержимое извлечённых theme/tokens/desktop surface с `e248126`, 4 Connect widget/model tests с 4 goldens и 224 HOME tests прошли без обновления эталонов |
+
+Приватные каталоги результатов (содержат временные test credentials в
+`lab.json`, **не публиковать**):
+
+- revoke: `E:/dev/temp/codex-m144-desktop-ec9204a3cfd342d28ef8d895db87c8ce`;
+- Stop: `E:/dev/temp/codex-m144-desktop-4f2440299c534ef2942ac9163c9fefb3`.
+
+В них `result.json`, `network.json` и `closed.json` содержат только метаданные
+проверки, без изображений. Воспроизведение с отдельным согласием:
+`tools/remote-lab/WINDOWS_DESKTOP_ACCEPTANCE.md`. Обычный `-shadow` остаётся
+SYNTHETIC: для живого режима нужны одновременно дополнительный флаг и env opt-in;
+production local consent сохраняется. Отсутствие второго opt-in проверено
+как отказ до запуска стенда (`codex-m144-desktop-opt-in-guard.log`).
+
+### Обнаруженный дефект и неуспешные промежуточные прогоны
+
+Проверка видимости обнаружила **настоящий дефект Host**: скрытый запуск console
+helper через STARTUPINFO/SW_HIDE также скрывал первоначальное окно Stop,
+несмотря на WS_VISIBLE. Этот прогон **FAIL**, немедленно завершён до ввода.
+Это соответствует [поведению первого ShowWindow](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-showwindow).
+Исправление `bd12743`: явный показ/позиционирование topmost notice, проверка
+видимого enabled Stop **до запуска RDP**, прекращение сеанса при скрытии окна.
+Диалог согласия также topmost (по умолчанию No), подтверждение не автоматизировано.
+
+Другие промежуточные прогоны не считаются PASS: отменён прогон с тестовой
+точкой за пределами первичного монитора; исправлены file-sharing гонки fixture
+через immutable status/command snapshots; один прогон ввода остановлен при
+дополнительном Space в тестовом окне, перезаписавшем LastKey (источник этого
+дополнительного события не установлен); один Stop-сеанс истёк без согласия,
+владелец сообщил, что диалог не виден. Управление личными окнами не выполнялось.
+Успешный revoke-прогон отдельно подтверждает A и мышь; Stop принят отдельным
+прогоном без повторного ввода. Старые FAIL-журналы сохранены, не подменены PASS.
+
+### Регрессии после исправления
+
+- Go `test ./...`, `vet ./...` — **PASS**; Windows native synthetic lifecycle,
+  TLS/права/файлы включены. Linux Go cross-build — **PASS**, не runtime.
+- Dart analyze — **PASS**, tests — **PASS 11 / SKIPPED 7** (Linux relay и
+  прежний sample-server отдельно в этот запуск не включались).
+- Connect analyze — **PASS**, tests — **PASS 4**, HOME tests — **PASS 224**.
+- Native Host Windows Release build/install — **PASS**. Новый пакет указан
+  в таблице артефактов; старый ZIP до исправления Stop больше не является актуальным.
+- Журналы: `codex-m144-desktop-go-test.log`, `codex-m144-desktop-go-vet.log`,
+  `codex-m144-desktop-linux-cross.log`, `codex-m144-desktop-dart-analyze.log`,
+  `codex-m144-desktop-dart-test.log`, `codex-m144-desktop-analyze.log`,
+  `codex-m144-desktop-widget.log`, `codex-m144-desktop-home-test.log`,
+  `codex-m144-shadow-visible-stop-build.log`, `codex-m144-desktop-cleanup.log`
+  в `E:/dev/logs`. Новый Host ZIP совпадает с проверенным native helper;
+  сканирование 18 собственных desktop-журналов и пакета не выявило шаблонов
+  полных credentials/private keys или вложенных тестовых token/key-файлов.
+
+## Оставшаяся приёмка M14.4 — UNVERIFIED
+
+1. Реальный Windows desktop: Unicode/кириллица, view-only, двусторонний OS
+   clipboard, файлы и reconnect. В текущем согласованном сценарии clipboard/files
+   отключены; synthetic проверки этих функций остаются PASS, не real desktop.
+2. С отдельно согласованным безопасным сценарием — lock/UAC/DXGI access-lost
+   и отсутствие продолжения после смены desktop. Настройки UAC не менять.
+3. Windows Home, чистая Windows без SDK, длительная работа/производительность,
+   масштабирование, второй физический ПК и реальная сеть/интернет.
+4. Linux native runtime новых изменений — отдельная среда (WSL отсутствует).
+
+Ограниченная живая приёмка выполнена, но полная матрица ещё не пройдена:
+M14.4 остаётся **IN_PROGRESS**, не DONE. M11 CANCELLED; M13/Android/editor
+не начинались. Firewall, UAC, Windows RDP, службы, драйверы и системные права
+не менялись. Push не выполнялся.
