@@ -1,0 +1,21 @@
+{
+  "listenAddr": "0.0.0.0:8443",
+  "coreUrl": "http://127.0.0.1:8787",
+  "tokenFile": "/run/credentials/aer-remote-gateway.service/gateway.token",
+  "stateDir": "/var/lib/aer-remote-gateway",
+  "tlsCert": "",
+  "tlsKey": "",
+  "maxTunnels": 32,
+  "maxTunnelsPerClient": 4,
+  "maxParkedPerSession": 2,
+  "idleTimeoutSec": 600,
+  "parkTimeoutSec": 120,
+  "pairWaitSec": 15,
+  "aliveCheckSec": 5,
+  "coreLossSec": 60,
+  "authFailLimit": 10,
+  "authFailWindowSec": 600,
+  "banSec": 900,
+  "pairLimit": 5,
+  "agentProxy": true
+}

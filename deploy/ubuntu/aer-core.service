@@ -1,0 +1,38 @@
+# AER Core on the home Ubuntu Server (ADR-017/018). Installed by
+# deploy/ubuntu/install-server.sh, never enabled automatically.
+# Core listens on loopback only: the Gateway is its only public front door.
+[Unit]
+Description=AER HOME Core
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aer-core
+Group=aer-core
+ExecStart=/usr/local/bin/aer-core -config /etc/aer-home/core.json
+Restart=on-failure
+RestartSec=5
+Environment=AER_LOG_FORMAT=json
+# Data (SQLite, owner token) in /var/lib/aer-home/core, 0700 aer-core.
+StateDirectory=aer-home/core
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

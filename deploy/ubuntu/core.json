@@ -1,0 +1,16 @@
+{
+  "mode": "server",
+  "listenAddr": "127.0.0.1:8787",
+  "dataDir": "/var/lib/aer-home/core",
+  "logLevel": "info",
+  "logFormat": "json",
+  "monitoring": {
+    "docker": { "enabled": false }
+  },
+  "remote": {
+    "maxActiveSessions": 8,
+    "defaultMinutes": 60,
+    "maxMinutes": 480,
+    "retentionDays": 365
+  }
+}
