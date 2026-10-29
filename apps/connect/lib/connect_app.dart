@@ -95,6 +95,8 @@ class _ConnectHomeState extends State<ConnectHome> {
                 ),
               if (c.device != null)
                 ..._device(context)
+              else if (c.automaticRegistration)
+                ..._automatic(context)
               else if (c.paired && !c.unauthorized)
                 ..._paired(context)
               else
@@ -315,6 +317,83 @@ class _ConnectHomeState extends State<ConnectHome> {
     ];
   }
 
+  List<Widget> _automatic(BuildContext context) {
+    final text = Theme.of(context).textTheme;
+    final status = switch (c.registrationStatus) {
+      'pending' => 'Ждём разрешения владельца сервера',
+      'rejected' => 'Владелец отклонил регистрацию',
+      'revoked' => 'Регистрация отозвана владельцем',
+      'error' => 'Не удалось зарегистрировать компьютер',
+      'removed' => 'Регистрация удалена',
+      _ => 'Подключаем этот компьютер…',
+    };
+    return [
+      Card(
+        key: const Key('automatic-registration'),
+        child: Padding(
+          padding: const EdgeInsets.all(AerSpacing.m),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.computer_rounded, color: AerColors.accent),
+                  const SizedBox(width: AerSpacing.s),
+                  Text('Этот компьютер', style: text.titleMedium),
+                ],
+              ),
+              const SizedBox(height: AerSpacing.m),
+              Text(
+                status,
+                key: const Key('registration-status'),
+                style: text.bodyMedium,
+              ),
+              const SizedBox(height: AerSpacing.s),
+              Text(
+                'ID и временный пароль появятся после регистрации. '
+                'Адрес сервера и защита соединения уже настроены.',
+                style: text.bodySmall,
+              ),
+              if (c.registrationStatus == 'pending') ...[
+                const SizedBox(height: AerSpacing.s),
+                Text(
+                  'Владелец разрешает эту установку на своём сервере. '
+                  'Это окно можно оставить открытым — всё продолжится автоматически.',
+                  style: text.bodySmall,
+                ),
+              ],
+              if (c.registrationFingerprint.isNotEmpty)
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const Text('Сведения об устройстве'),
+                  children: [
+                    SelectableText(
+                      c.registrationFingerprint,
+                      style: text.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    ),
+                  ],
+                ),
+              if (c.registrationStatus == 'error' ||
+                  c.registrationStatus == 'removed')
+                TextButton.icon(
+                  key: const Key('registration-retry'),
+                  onPressed: c.registerAutomatically,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(
+                    c.registrationStatus == 'removed'
+                        ? 'Зарегистрировать компьютер'
+                        : 'Повторить подключение',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      const SizedBox(height: AerSpacing.m),
+      ConnectByIdCard(c: c, enabled: false, onDesktop: () async {}),
+    ];
+  }
+
   List<Widget> _device(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final cards = [
@@ -331,11 +410,18 @@ class _ConnectHomeState extends State<ConnectHome> {
               color: AerColors.terracotta,
             ),
             title: const Text('Регистрация отозвана владельцем сервера'),
-            subtitle: const Text(
-              'Этот компьютер больше не принимает и не устанавливает подключения. Получите новый код регистрации.',
+            subtitle: Text(
+              c.preset != null
+                  ? 'Этот компьютер больше не принимает и не устанавливает подключения. Новую установку должен разрешить владелец сервера.'
+                  : 'Этот компьютер больше не принимает и не устанавливает подключения. Получите новый код регистрации.',
             ),
             trailing: TextButton(
-              onPressed: _busy ? null : () => _run(c.forgetDevice),
+              onPressed: _busy
+                  ? null
+                  : () => _run(() async {
+                      await c.forgetDevice();
+                      if (c.preset != null) await c.registerAutomatically();
+                    }),
               child: const Text('Зарегистрировать заново'),
             ),
           ),

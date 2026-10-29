@@ -395,7 +395,13 @@ class ThisComputerCard extends StatelessWidget {
 
 /// «Подключиться»: ID and password of the other computer.
 class ConnectByIdCard extends StatefulWidget {
-  const ConnectByIdCard({super.key, required this.c, required this.onDesktop});
+  const ConnectByIdCard({
+    super.key,
+    required this.c,
+    required this.onDesktop,
+    this.enabled = true,
+  });
+  final bool enabled;
   final ConnectController c;
   final Future<void> Function() onDesktop;
   @override
@@ -417,6 +423,7 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
   final _passwordFocus = FocusNode();
 
   Future<void> _connect() async {
+    if (!widget.enabled) return;
     await c.connectById(_id.text, _password.text);
     if (!mounted) return;
     if (c.viewer != null) {
@@ -459,7 +466,7 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
             TextField(
               key: const Key('remote-id'),
               controller: _id,
-              enabled: !c.busy && !c.live,
+              enabled: widget.enabled && !c.busy && !c.live,
               keyboardType: TextInputType.number,
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9 ]')),
@@ -475,7 +482,7 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
               key: const Key('remote-password'),
               controller: _password,
               focusNode: _passwordFocus,
-              enabled: !c.busy && !c.live,
+              enabled: widget.enabled && !c.busy && !c.live,
               obscureText: true,
               enableSuggestions: false,
               autocorrect: false,
@@ -485,11 +492,11 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
             const SizedBox(height: AerSpacing.m),
             FilledButton.icon(
               key: const Key('remote-connect'),
-              onPressed: c.busy || c.live ? null : _connect,
+              onPressed: !widget.enabled || c.busy || c.live ? null : _connect,
               icon: const Icon(Icons.login_rounded, size: 18),
               label: const Text('Подключиться'),
             ),
-            if (c.error != null) ...[
+            if (widget.enabled && c.error != null) ...[
               const SizedBox(height: AerSpacing.s),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

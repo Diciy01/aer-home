@@ -21,6 +21,7 @@ class ConnectSecureStore implements ConnectStore {
 
   /// AER Connect Anywhere device (ADR-018): number, both credentials, key.
   static const deviceKey = 'aer-connect.device.v2';
+  static const registrationKey = 'aer-connect.registration.v1';
   final String key;
   final _store = const FlutterSecureStorage();
   @override
@@ -63,17 +64,29 @@ class ConnectController extends ChangeNotifier {
     Future<String> Function(Uri)? probe,
     this.poll = const Duration(seconds: 2),
     ConnectStore? deviceStore,
+    ConnectStore? registrationStore,
     this.hostRuntime,
     HostTools? tools,
     this.preset,
   }) : _client = client ?? GatewayClient.new,
        _probe = probe ?? probeFingerprint,
        deviceStore = deviceStore ?? _NoDeviceStore(),
+       registrationStore =
+           registrationStore ??
+           ConnectSecureStore(ConnectSecureStore.registrationKey),
        tools = tools ?? HostTools();
   final ConnectStore store;
 
   /// AER Connect Anywhere (ADR-018).
   final ConnectStore deviceStore;
+  final ConnectStore registrationStore;
+  String registrationStatus = '';
+  String registrationFingerprint = '';
+  Timer? _registrationTimer;
+  GatewayClient? _registrationApi;
+  bool _registering = false;
+  int _registrationGeneration = 0;
+  bool get automaticRegistration => preset != null && device == null && !paired;
   final HostTools tools;
   final HostRuntimeFactory? hostRuntime;
   final ServerPreset? preset;
@@ -161,7 +174,10 @@ class ConnectController extends ChangeNotifier {
     }
     try {
       final raw = await store.read();
-      if (raw == null) return;
+      if (raw == null) {
+        if (preset != null) await registerAutomatically();
+        return;
+      }
       final j = jsonDecode(raw) as Map<String, dynamic>;
       final s = GatewayServer.parse(
         j['address'] as String,
@@ -186,6 +202,151 @@ class ConnectController extends ChangeNotifier {
 
   Future<String> probe(String address) =>
       _probe(GatewayServer.parse(address, '').base);
+
+  /// The package contains public server configuration only. The installation
+  /// key is persisted in DPAPI BEFORE networking, including failed first runs.
+  Future<void> registerAutomatically() async {
+    if (_registering || _disposed || device != null || preset == null) return;
+    _registrationTimer?.cancel();
+    _registering = true;
+    final generation = _registrationGeneration;
+    registrationStatus = 'connecting';
+    error = null;
+    changed();
+    var retry = false;
+    try {
+      final server = GatewayServer.parse(preset!.address, preset!.fingerprint);
+      final raw = await registrationStore.read();
+      Map<String, dynamic> identity;
+      if (raw == null) {
+        final key = await tools.keygen();
+        final installId = HostTools.newInstallId();
+        identity = {
+          'v': 1,
+          'address': server.base.toString(),
+          'fingerprint': normalizeFingerprint(preset!.fingerprint),
+          'boxKey': key.privateKey,
+          'boxPub': key.publicKey,
+          'installId': installId,
+          'instance': await tools.instance(installId),
+          'name': Platform.localHostname,
+        };
+        await registrationStore.write(jsonEncode(identity));
+      } else {
+        identity = jsonDecode(raw) as Map<String, dynamic>;
+        if (identity['v'] != 1 ||
+            identity['address'] != server.base.toString() ||
+            identity['fingerprint'] !=
+                normalizeFingerprint(preset!.fingerprint)) {
+          throw const FormatException(
+            'Конфигурация сервера изменилась. Обратитесь к владельцу.',
+          );
+        }
+        if (identity['instance'] !=
+            await tools.instance(identity['installId'] as String)) {
+          throw const FormatException(
+            'Обнаружена копия установки на другом компьютере.',
+          );
+        }
+      }
+      registrationFingerprint = await installationFingerprint(
+        identity['boxKey'] as String,
+      );
+      if (_disposed || generation != _registrationGeneration) return;
+      final next = _registrationApi = _client(server);
+      Future<RegistrationReply> request([String proof = '']) =>
+          next.registerInstallation(
+            deviceName: identity['name'] as String,
+            boxPub: identity['boxPub'] as String,
+            instance: identity['instance'] as String,
+            proof: proof,
+          );
+      var reply = await request();
+      if (reply.status != 'verifying' || reply.box == null) {
+        throw const FormatException(
+          'Сервер не подтвердил протокол регистрации',
+        );
+      }
+      final proof = await openRegistration(
+        identity['boxKey'] as String,
+        reply.id,
+        identity['instance'] as String,
+        reply.box!,
+      );
+      final requestId = reply.id;
+      reply = await request(proof);
+      if (reply.id != requestId) {
+        throw const FormatException('Идентичность заявки изменилась');
+      }
+      if (_disposed || generation != _registrationGeneration) return;
+      registrationStatus = reply.status;
+      if (reply.status == 'approved' && reply.box != null) {
+        final plain = await openRegistration(
+          identity['boxKey'] as String,
+          reply.id,
+          identity['instance'] as String,
+          reply.box!,
+        );
+        final e = DeviceEnrollment.fromJson(
+          jsonDecode(plain) as Map<String, dynamic>,
+        );
+        final d = DeviceProfile(
+          address: server.base.toString(),
+          fingerprint: preset!.fingerprint,
+          deviceId: e.deviceId,
+          number: e.number,
+          name: e.name,
+          agentToken: e.agentToken,
+          clientCredential: e.clientCredential,
+          boxKey: identity['boxKey'] as String,
+          installId: identity['installId'] as String,
+        );
+        if (!validDeviceNumber(e.number) ||
+            !e.agentToken.startsWith('aer1.') ||
+            !e.clientCredential.startsWith('aerc1.')) {
+          throw const FormatException(
+            'Некорректные учётные данные регистрации',
+          );
+        }
+        if (_disposed || generation != _registrationGeneration) return;
+        await deviceStore.write(jsonEncode(d.toJson()));
+        await _useDevice(d);
+        // Keep the pending identity until explicit removal. A crash between
+        // credential issuance and storing the profile resumes the same request.
+      } else if (reply.status == 'pending') {
+        retry = true;
+      } else if (reply.status != 'rejected' && reply.status != 'revoked') {
+        throw const FormatException('Неизвестное состояние регистрации');
+      }
+    } catch (e) {
+      registrationStatus = 'error';
+      error = switch (e) {
+        PinMismatchException() || HandshakeException() => 'Сертификат сервера изменился — подключение запрещено. Обратитесь к владельцу сервера.',
+        FormatException(:final message) => message,
+        SocketException() || TimeoutException() =>
+          'Сервер временно недоступен. Подключение повторится автоматически.',
+        _ => describe(e),
+      };
+      retry =
+          e is SocketException ||
+          e is TimeoutException ||
+          (e is RemoteEngineException && e.status >= 500);
+    } finally {
+      _registrationApi?.close();
+      _registrationApi = null;
+      _registering = false;
+      if (retry &&
+          !_disposed &&
+          generation == _registrationGeneration &&
+          device == null) {
+        _registrationTimer = Timer(
+          const Duration(seconds: 10),
+          registerAutomatically,
+        );
+      }
+      changed();
+    }
+  }
 
   // ---- AER Connect Anywhere: this computer as a device ----
 
@@ -436,9 +597,15 @@ class ConnectController extends ChangeNotifier {
   /// Removes this computer's registration from this installation. The
   /// owner can revoke it on the server; a new registration gets a new ID.
   Future<void> forgetDevice() async {
+    _registrationGeneration++;
+    _registrationTimer?.cancel();
     await end();
     await _stopHost();
     await deviceStore.delete();
+    // Legacy/manual registrations have no automatic-enrollment identity.
+    if (preset != null) await registrationStore.delete();
+    registrationStatus = 'removed';
+    registrationFingerprint = '';
     device = null;
     host = const HostView();
     api?.close();
@@ -642,6 +809,9 @@ class ConnectController extends ChangeNotifier {
   }
 
   Future<void> shutdown() async {
+    _registrationGeneration++;
+    _registrationTimer?.cancel();
+    _registrationApi?.close();
     await end();
     await _stopHost();
     api?.close();

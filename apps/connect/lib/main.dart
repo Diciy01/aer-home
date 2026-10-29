@@ -14,8 +14,8 @@ void main(List<String> args) {
   final c = ConnectController(
     store: ConnectSecureStore(),
     deviceStore: ConnectSecureStore(ConnectSecureStore.deviceKey),
-    // Owner-built installers may carry the server address and pin; the
-    // enrollment code is always typed by the user.
+    // Owner packages carry only the server address and certificate pin.
+    // Installation identity and registration are automatic, never shared.
     preset: ServerPreset.read(
       '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}connect.json',
     ),

@@ -26,6 +26,8 @@ if (Test-Path -LiteralPath $output) { throw 'OutputDir already exists; use a new
 New-Item -ItemType Directory -Path $output | Out-Null
 $app = Join-Path $output 'app'
 Copy-Item -LiteralPath $BundlePath -Destination $app -Recurse
+# Keep the existing installer entry point and provide the portable product name.
+Copy-Item -LiteralPath (Join-Path $app 'aer_connect.exe') -Destination (Join-Path $app 'AER-Connect.exe')
 # Host files from an explicit allow-list. Shared runtime DLLs must be the
 # very same build as the viewer's; a different one is refused, not mixed.
 foreach ($name in @('aer-shadow.exe','freerdp-server3.dll','freerdp-shadow3.dll','winpr-tools3.dll','freerdp3.dll','winpr3.dll',
@@ -52,6 +54,6 @@ foreach ($package in @('freerdp','openssl','winpr','zlib','cjson')) {
     } elseif ($package -ne 'winpr') { throw "Missing third-party license: $package" }
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\..\deploy\connect-windows\install.ps1'),(Join-Path $PSScriptRoot '..\..\deploy\connect-windows\uninstall.ps1') -Destination $output
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\..\docs\AER_CONNECT.md') -Destination (Join-Path $output 'README.md')
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\..\docs\AER_CONNECT_AUTOREGISTRATION.md') -Destination (Join-Path $output 'README.md')
 Compress-Archive -LiteralPath $app,(Join-Path $output 'install.ps1'),(Join-Path $output 'uninstall.ps1'),(Join-Path $output 'README.md') -DestinationPath ($output + '.zip')
 Write-Output "Package: $output.zip"

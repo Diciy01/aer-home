@@ -43,6 +43,16 @@ $1"
 }
 
 case "${1:-}" in
+registrations)
+  api GET /remote/registrations | json 'for r in d: print(r["id"], r["name"], r["fingerprint"], r["expiresAt"])'
+  ;;
+approve-registration|reject-registration)
+  [ -n "${2:-}" ] || die "usage: aer-admin $1 REQUEST_ID"
+  [[ "$2" =~ ^[a-zA-Z0-9_-]{16,80}$ ]] || die "invalid request ID"
+  action=approve
+  [ "$1" = reject-registration ] && action=reject
+  api POST "/remote/registrations/$2/$action" '{}' | json 'print(d["id"], d["status"])'
+  ;;
 gateway-credential)
   [ -e "$etc/gateway.token" ] && die "$etc/gateway.token exists; revoke the old Gateway agent in AER HOME first"
   server=$(api POST /registry/entities '{"name":"Домашний сервер (Gateway)","type":"server"}' | json 'print(d["id"])')
