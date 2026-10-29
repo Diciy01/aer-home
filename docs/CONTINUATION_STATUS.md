@@ -36,12 +36,12 @@
 - [ ] Чистая Windows VM, второй ПК/интернет, Windows NLA/clipboard/RU desktop — UNVERIFIED. Полная матрица, артефакт ZIP и ограничения: `docs/M10_WINDOWS_REPORT.md`, сборка/установка — `docs/WINDOWS.md`.
 
 ## M14 Remote 2 (Engine + Gateway + AER Connect) — IN_PROGRESS (с 2026-10-28), не опубликовано
-ADR-017, контракт 0.11.0, `docs/REMOTE_GATEWAY.md`. M07 сохранён полностью (прямой путь LAN работает как прежде).
+ADR-017, контракт 0.11.1, `docs/REMOTE_GATEWAY.md`. M07 сохранён: прежние backend/внешний клиент и прямой путь LAN остаются; новый `windows-shadow` требует relay.
 - [x] ADR-017 и строка M14 в дорожной карте (после M10; M11 отменён и не является зависимостью)
 - [x] M14.1 Engine: Go `core/internal/remoteengine` (Core и агент переведены на общие типы); Dart `packages/aer_remote` (клиент Gateway, закрепление, туннель, локальный порт, жизненный цикл сеанса, интерфейс `RemoteViewer`)
 - [x] M14.2 Gateway: клиенты удалённого доступа и служебный API в Core (миграция remote 2), `aer-remote-gateway`, ноги ретрансляции агента, стенд `core/cmd/aer-remotelab`; тесты Go/Dart/бинарники — PASS на loopback
 - [x] M14.3 встроенный просмотр: `native/aer_rdp` (FreeRDP 3.32, `freerdp3-dev` установлен владельцем), Dart FFI и `EmbeddedRdpViewer` в `packages/aer_remote`, страница рабочего стола в AER HOME (Remmina — запасной вариант); живые проверки на стенде — `docs/REMOTE_GATEWAY.md`
-- [ ] M14.4 AER Connect (Windows) и хост `windows-shadow` — после M10 (нужен Windows)
+- [ ] M14.4 IN_PROGRESS (2026-10-29): AER Connect реализован, Release/установщик/UI/DPAPI проверены; `windows-shadow` реализован и проходит настоящий RDP/Gateway с SYNTHETIC источником, права, pin/password, clipboard/files/reconnect/revoke/TTL. Исправлен CRT allocator defect (`bf44ef9`). Реальные DXGI/SendInput BLOCKED до отдельного согласия и обычного пользовательского Host-процесса; Home/чистая VM/интернет UNVERIFIED. `M14_4_REPORT.md`, `CRT_FFI_REPORT.md`.
 - [x] M14.5 интеграция в AER HOME: «Клиенты» (создать/права/код/отозвать) и «Через Gateway» (сервер, отпечаток, закрепление, сопряжение, сеанс во встроенном просмотре); Gateway сообщает отпечаток Core; живая проверка — `docs/REMOTE_GATEWAY.md`
 
 ## Следующий шаг

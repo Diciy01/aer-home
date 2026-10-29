@@ -3,6 +3,12 @@
 Собственная точка входа удалённого доступа на домашнем сервере. Без Tailscale, RustDesk, TeamViewer и чужих серверов. Решение и причины — `docs/adr/ADR-017-remote-engine-gateway.md`.
 
 ## Компоненты в репозитории
+
+Обновление M14.4 от 2026-10-29: AER Connect и код Windows Host реализованы,
+но реальная DXGI/SendInput-приёмка ещё BLOCKED до отдельного согласия.
+Результаты synthetic RDP, сборок, установщика и исправления CRT —
+`M14_4_REPORT.md`; инструкция хоста — `WINDOWS_HOST.md`.
+
 | Путь | Что это |
 |---|---|
 | `core/internal/remoteengine` | общий движок (Go): модель сеанса, команды/события агента, выдача, протокол туннеля `aer-tunnel/1` (`Dial`/`Accept`/`Splice`), закрепление TLS, секреты |
@@ -10,7 +16,9 @@
 | `core/internal/remotegw`, `core/cmd/aer-remote-gateway` | сам Gateway |
 | `core/internal/remotehost/relay.go` | ноги ретрансляции агента хоста |
 | `packages/aer_remote` | общий движок (Dart) для AER HOME и AER Connect |
-| `core/cmd/aer-remotelab` | изолированный стенд: Core + Gateway + агент с поддельным RDP, только 127.0.0.1 |
+| `apps/connect`, `packages/aer_widgets` | самостоятельный Windows-клиент, DPAPI-профиль и общие неизменённые визуальные компоненты AER HOME |
+| `native/aer_shadow`, Windows `remotehost` backend | управляемый Host поверх FreeRDP server/shadow, собственные DXGI/SendInput; реальная desktop-приёмка ещё BLOCKED |
+| `core/cmd/aer-remotelab` | изолированный Core + Gateway + агент, только 127.0.0.1; fake RDP, loopback sample или `-shadow` с настоящим RDP и исключительно SYNTHETIC источником |
 | `deploy/remote-gateway.example.json` | пример конфигурации Gateway |
 
 ## Публичный API Gateway (`/gw/v1`, только HTTPS, HTTP/1.1)
@@ -34,7 +42,7 @@
 
 ## Авторизация
 1. Владелец (AER HOME в LAN, токен владельца): `POST /api/v1/remote/clients {name, hosts[], clipboard, files}` → код `XXXX-XXXX-XXXX` (15 мин, один раз). Повторное сопряжение — `POST /remote/clients/{id}/pairing` (старая учётка перестаёт работать). Отзыв — `POST /remote/clients/{id}/revoke` (сеансы клиента → `revoked`, туннели закрываются).
-2. Клиент: адрес сервера + код. Перед вводом кода клиент показывает отпечаток сертификата Gateway (`probeFingerprint`), пользователь сверяет его с выводом `aer-remote-gateway -fingerprint` — затем отпечаток закрепляется. Учётка хранится в защищённом хранилище ОС (реализация хранения — в приложении, M14.4).
+2. Клиент: адрес сервера + код. Перед вводом кода клиент показывает отпечаток сертификата Gateway (`probeFingerprint`), пользователь сверяет его с выводом `aer-remote-gateway -fingerprint` — затем отпечаток закрепляется. В AER Connect профиль и учётка `aerc1` хранятся вместе в отдельном DPAPI-хранилище (M14.4), owner token не используется. Инструкция — `AER_CONNECT.md`.
 3. Gateway → Core: служебная учётка агента вида `gateway` (`POST /api/v1/monitoring/agents {"kind":"gateway"}`) + учётка клиента в `X-AER-Remote-Client`. Core проверяет обе; Gateway ничего не решает сам.
 4. Права сеанса = хост ∩ политика владельца ∩ права клиента ∩ запрос. Билеты: 256 бит, только SHA-256 в памяти Core, 60 с, одно использование (неудачная попытка тоже сжигает билет), привязаны к сеансу, клиенту и каналу, стираются при завершении сеанса.
 5. Ограничения попыток: Core блокирует клиента на 15 мин после 5 неверных секретов за 10 мин; Gateway банит адрес на 15 мин после 10 неудач (неверная учётка, билет) за 10 мин и пропускает не больше 5 попыток сопряжения с адреса за 10 мин. Ответы на «нет клиента», «неверный секрет», «отозван», «заблокирован» одинаковы.

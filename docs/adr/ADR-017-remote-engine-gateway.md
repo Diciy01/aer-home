@@ -43,8 +43,19 @@ M07 дал рабочий удалённый доступ в LAN: Core — пл�
 |---|---|---|---|
 | Ubuntu GNOME (Wayland) | `gnome-rdp` (M07) | пароль на сеанс | VERIFIED в M07 (стенд) |
 | Windows Pro/Enterprise | `windows-rdp` (M07, readiness probe) | предполагается учётная запись Windows (NLA); управляемого AER-сеанса ещё нет | M10: ready=false / Open отказывает, пока не реализованы настоящий сертификат, права и отзыв; реализация Host → M14.4 |
-| Windows Home (и Pro без блокировки консоли) | `windows-shadow`: FreeRDP shadow server (Apache-2.0, подсистема Windows, DXGI) — общий доступ к текущему сеансу, пароль на сеанс через SAM-файл | пароль на сеанс | **SPIKE, UNVERIFIED** — проверка в M10/M14.4 |
+| Windows Home (и Pro без блокировки консоли) | `windows-shadow`: собственная DXGI/SendInput-подсистема поверх FreeRDP server/shadow (Apache-2.0), текущий обычный пользователь, локальное согласие и Stop | случайный пароль через анонимный stdin, TLS-сертификат/ключ на сеанс; без SAM-файла и Windows logon | **IN_PROGRESS M14.4**: код и настоящий RDP с SYNTHETIC источником проверены на Windows; реальная DXGI/SendInput-приёмка BLOCKED до отдельного согласия/обычного пользовательского процесса |
 Встроенный RDP на Windows Home отсутствует — это не предполагается. Если shadow-подсистема FreeRDP окажется непригодной, запасной путь — серверная библиотека FreeRDP (`libfreerdp-server3`) с собственным захватом DXGI и `SendInput` за тем же интерфейсом `Backend`; кодеки остаются из FreeRDP.
+
+Реализация 2026-10-29 выбрала этот запасной путь: `native/aer_shadow` не
+собирает upstream Windows WDS/CLI, но переиспользует server/shadow API.
+RDP слушает только 127.0.0.1, Windows backend требует relay и prompt,
+отвергает службу/session 0/elevated/UIAccess/secure desktop. Lock/UAC/DXGI
+access-lost и native deadline прекращают доступ без автоматического возобновления.
+Контракт 0.11.1 добавляет `windows-shadow` без смены wire-протокола/миграции БД;
+старые backend и внешние клиенты сохраняются. Сначала обновляются Core/агент,
+затем выбирается новый backend в конфиге; старый Core не рекламирует его.
+Ограничения и незавершённая реальная приёмка: `../WINDOWS_HOST.md`,
+`../M14_4_REPORT.md`. Наличие синтетического теста не подтверждает DXGI/SendInput.
 
 ### 4. Встроенный просмотр (M14.3) — FreeRDP 3 через FFI
 Оценка библиотек:

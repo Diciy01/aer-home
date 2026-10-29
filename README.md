@@ -104,3 +104,5 @@ Android, Windows, Linux/Ubuntu Desktop и Ubuntu Server. Нативный iOS (M
 ## Windows
 
 Нативный Windows Desktop (M10): сборка, переносимый пакет, пользовательская установка, трей и уведомления — [инструкция](docs/WINDOWS.md), [проверки и ограничения](docs/M10_WINDOWS_REPORT.md). Core запускается отдельно. Встроенный Remote Viewer проверен через локальный Gateway/RDP-стенд; управляемый Windows Host и отдельный AER Connect относятся к M14.4.
+
+M14.4: [AER Connect](docs/AER_CONNECT.md) реализован и собран с пользовательским установщиком, в том же визуальном стиле AER HOME. [Windows Host](docs/WINDOWS_HOST.md) реализован через FreeRDP server/shadow и DXGI/SendInput; RDP/Gateway проверены с синтетическим источником. Реальный desktop/input ещё требует отдельного согласия и приёмки; этап **IN_PROGRESS**. [Результаты и ограничения](docs/M14_4_REPORT.md), [исправление CRT/FFI](docs/CRT_FFI_REPORT.md).
