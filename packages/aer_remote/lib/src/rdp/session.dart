@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
@@ -13,21 +14,28 @@ enum RdpState { idle, connecting, connected, disconnected, failed }
 /// reconnect is a new [RdpSession].
 class RdpSession {
   RdpSession(this._n) : _h = _n.newHandle() {
-    if (_h == nullptr) throw StateError('aer_rdp_new failed');
+    if (_h == nullptr) {
+      calloc.free(_clipSeq);
+      throw StateError('aer_rdp_new failed');
+    }
   }
 
   final RdpNative _n;
   Pointer<Void> _h;
   int _seq = -1;
   final Pointer<Uint64> _clipSeq = calloc<Uint64>();
+  Future<void>? _disposing;
 
   bool get _alive => _h != nullptr;
 
   /// Starts connecting; [ViewerTarget.certSha256] is the only certificate
   /// accepted. False when the connection could not even be started.
   bool connect(ViewerTarget t, {int width = 1280, int height = 800}) {
-    final host = t.host.toNativeUtf8(), user = t.username.toNativeUtf8();
-    final pass = t.password.toNativeUtf8(), pin = t.certSha256.toNativeUtf8();
+    if (!_alive) return false;
+    final host = t.host.toNativeUtf8(allocator: calloc),
+        user = t.username.toNativeUtf8(allocator: calloc);
+    final pass = t.password.toNativeUtf8(allocator: calloc),
+        pin = t.certSha256.toNativeUtf8(allocator: calloc);
     try {
       return _n.connect(
             _h,
@@ -108,7 +116,7 @@ class RdpSession {
   /// has no clipboard right).
   bool setClipboard(String text) {
     if (!_alive) return false;
-    final p = text.toNativeUtf8();
+    final p = text.toNativeUtf8(allocator: calloc);
     try {
       return _n.clipSet(_h, p) == 0;
     } finally {
@@ -139,6 +147,28 @@ class RdpSession {
     _h = nullptr;
     calloc.free(_clipSeq);
   }
+
+  /// Joining FreeRDP may flush TLS/channel traffic through a Dart relay.
+  /// Keep that isolate responsive while the native connection thread exits.
+  Future<void> disposeAsync() {
+    final pending = _disposing;
+    if (pending != null) return pending;
+    if (!_alive) return Future<void>.value();
+    final address = _h.address, freeAddress = _n.freeAddress;
+    _h = nullptr;
+    calloc.free(_clipSeq);
+    return _disposing = Isolate.run(
+      () => _freeNativeHandle(freeAddress, address),
+    );
+  }
+}
+
+void _freeNativeHandle(int function, int handle) {
+  final free =
+      Pointer<NativeFunction<Void Function(Pointer<Void>)>>.fromAddress(
+        function,
+      ).asFunction<void Function(Pointer<Void>)>();
+  free(Pointer<Void>.fromAddress(handle));
 }
 
 /// What the viewer UI shows.
@@ -189,6 +219,8 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
   var _attempts = 0;
   var _wasConnected = false;
   var _busy = false;
+  Future<void>? _nativeDisposal;
+  Future<void>? _closeFuture;
 
   final _status = StreamController<ViewerStatus>.broadcast();
   final _frames = StreamController<RdpFrame>.broadcast();
@@ -291,8 +323,9 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
         try {
           final failed = s.state == RdpState.failed;
           lastError = s.error;
-          s.dispose();
           _s = null;
+          await (_nativeDisposal = s.disposeAsync());
+          if (_closing) return;
           final retry =
               _wasConnected &&
               _attempts < maxReconnects &&
@@ -340,15 +373,18 @@ class EmbeddedRdpViewer implements InteractiveRemoteViewer {
       (_target?.clipboard ?? false) && (_s?.setClipboard(text) ?? false);
 
   @override
-  Future<void> close() async {
+  Future<void> close() => _closeFuture ??= _close();
+
+  Future<void> _close() async {
     _closing = true;
     _timer?.cancel();
     final s = _s;
     _s = null;
     if (s != null) {
       s.disconnect();
-      s.dispose();
+      await (_nativeDisposal = s.disposeAsync());
     }
+    await _nativeDisposal;
     lastFrame = null;
     _target = null;
     _set(ViewerStatus.closed);

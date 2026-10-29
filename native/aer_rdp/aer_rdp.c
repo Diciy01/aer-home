@@ -36,6 +36,7 @@
 
 #define AER_RDP_ABI 1
 #define QUEUE_MAX 1024
+#define CLIP_MAX_BYTES (1024U * 1024U)
 
 typedef struct
 {
@@ -146,6 +147,43 @@ static DWORD aer_verify_changed(freerdp* instance, const char* host, UINT16 port
 
 /* ---- clipboard (text only) ---- */
 
+/* Own every retained buffer in this module. WinPR's *Alloc functions use
+ * WinPR's CRT: freeing their result in an /MDd bridge linked to /MD WinPR
+ * is invalid. The non-allocating conversion APIs work with caller buffers
+ * on Windows and Linux, without requiring newer WinPR deallocator APIs. */
+static WCHAR* clip_to_utf16(const char* text, size_t* length)
+{
+	const SSIZE_T count = ConvertUtf8ToWChar(text, NULL, 0);
+	if (count < 0 || (size_t)count >= CLIP_MAX_BYTES / sizeof(WCHAR))
+		return NULL;
+	WCHAR* out = calloc((size_t)count + 1, sizeof(WCHAR));
+	if (!out)
+		return NULL;
+	if (ConvertUtf8ToWChar(text, out, (size_t)count + 1) != count)
+	{
+		free(out);
+		return NULL;
+	}
+	*length = (size_t)count;
+	return out;
+}
+
+static char* clip_to_utf8(const WCHAR* text, size_t length)
+{
+	const SSIZE_T count = ConvertWCharNToUtf8(text, length, NULL, 0);
+	if (count < 0 || (size_t)count >= CLIP_MAX_BYTES)
+		return NULL;
+	char* out = calloc((size_t)count + 1, sizeof(char));
+	if (!out)
+		return NULL;
+	if (ConvertWCharNToUtf8(text, length, out, (size_t)count + 1) != count)
+	{
+		free(out);
+		return NULL;
+	}
+	return out;
+}
+
 static UINT clip_send_format_list(AerRdp* r)
 {
 	CLIPRDR_FORMAT fmt = { CF_UNICODETEXT, NULL };
@@ -220,10 +258,12 @@ static UINT clip_server_data_response(CliprdrClientContext* c,
                                       const CLIPRDR_FORMAT_DATA_RESPONSE* resp)
 {
 	AerRdp* r = (AerRdp*)c->custom;
-	if ((resp->common.msgFlags & CB_RESPONSE_OK) == 0 || !resp->requestedFormatData)
+	if ((resp->common.msgFlags & CB_RESPONSE_OK) == 0 || !resp->requestedFormatData ||
+	    resp->common.dataLen < sizeof(WCHAR) || resp->common.dataLen > CLIP_MAX_BYTES ||
+	    resp->common.dataLen % sizeof(WCHAR) != 0)
 		return CHANNEL_RC_OK;
 	size_t wlen = resp->common.dataLen / sizeof(WCHAR);
-	char* text = ConvertWCharNToUtf8Alloc((const WCHAR*)resp->requestedFormatData, wlen, NULL);
+	char* text = clip_to_utf8((const WCHAR*)resp->requestedFormatData, wlen);
 	if (!text)
 		return CHANNEL_RC_OK;
 	EnterCriticalSection(&r->lock);
@@ -244,7 +284,7 @@ static UINT clip_server_data_request(CliprdrClientContext* c,
 	resp.common.msgType = CB_FORMAT_DATA_RESPONSE;
 	EnterCriticalSection(&r->lock);
 	if (req->requestedFormatId == CF_UNICODETEXT && r->local_text)
-		w = ConvertUtf8ToWCharAlloc(r->local_text, &wlen);
+		w = clip_to_utf16(r->local_text, &wlen);
 	LeaveCriticalSection(&r->lock);
 	if (w)
 	{
@@ -491,6 +531,11 @@ AerRdp* aer_rdp_new(void)
 	InitializeCriticalSection(&r->lock);
 	r->stop = CreateEvent(NULL, TRUE, FALSE, NULL);
 	r->wake = CreateEvent(NULL, FALSE, FALSE, NULL);
+	if (!r->stop || !r->wake)
+	{
+		aer_rdp_free(r);
+		return NULL;
+	}
 	return r;
 }
 
@@ -665,7 +710,11 @@ int aer_rdp_clip_set(AerRdp* r, const char* utf8)
 {
 	if (!r->clip_allowed)
 		return -1;
+	if (utf8 && strlen(utf8) >= CLIP_MAX_BYTES)
+		return -1;
 	char* copy = utf8 ? _strdup(utf8) : NULL;
+	if (utf8 && !copy)
+		return -1;
 	EnterCriticalSection(&r->lock);
 	free(r->local_text);
 	r->local_text = copy;

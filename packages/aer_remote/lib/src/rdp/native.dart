@@ -106,6 +106,9 @@ class RdpNative {
             Void Function(Pointer<Void>),
             void Function(Pointer<Void>)
           >('aer_rdp_free'),
+      freeAddress = lib
+          .lookup<NativeFunction<Void Function(Pointer<Void>)>>('aer_rdp_free')
+          .address,
       memFree = lib
           .lookupFunction<
             Void Function(Pointer<Void>),
@@ -114,6 +117,9 @@ class RdpNative {
 
   /// ABI version this binding expects.
   static const abi = 1;
+
+  /// The same loaded native function, usable by the disposal worker isolate.
+  final int freeAddress;
 
   static RdpNative? _cached;
 
@@ -149,7 +155,9 @@ class RdpNative {
     // and for explicit AER_RDP_LIB overrides. Restrict the search to this
     // absolute DLL directory and Windows' default safe directories; do not
     // modify PATH or the process-wide DLL search path.
-    final absolute = File(path).absolute.path;
+    // LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR requires a fully qualified Windows
+    // path; environment/build tools often pass a forward-slash path.
+    final absolute = File(path).absolute.uri.toFilePath(windows: true);
     final kernel = DynamicLibrary.open('kernel32.dll');
     final load = kernel
         .lookupFunction<
@@ -161,7 +169,7 @@ class RdpNative {
           Int32 Function(Pointer<Void>),
           int Function(Pointer<Void>)
         >('FreeLibrary');
-    final wide = absolute.toNativeUtf16();
+    final wide = absolute.toNativeUtf16(allocator: calloc);
     Pointer<Void> handle;
     try {
       handle = load(wide, nullptr, 0x00000100 | 0x00001000);

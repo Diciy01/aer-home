@@ -1,0 +1,13 @@
+if(NOT EXISTS "${AER_DUMPBIN}" OR NOT EXISTS "${AER_DLL}")
+  message(FATAL_ERROR "Cannot verify aer_rdp runtime imports")
+endif()
+execute_process(COMMAND "${AER_DUMPBIN}" /dependents "${AER_DLL}"
+  RESULT_VARIABLE result OUTPUT_VARIABLE imports ERROR_VARIABLE error)
+if(NOT result EQUAL 0)
+  message(FATAL_ERROR "aer_rdp runtime inspection failed: ${error}")
+endif()
+string(TOUPPER "${imports}" imports)
+if(imports MATCHES "UCRTBASED\\.DLL|VCRUNTIME[0-9_]*D\\.DLL|MSVCP[0-9_]*D\\.DLL")
+  message(FATAL_ERROR "aer_rdp imports Debug CRT while FreeRDP uses Release CRT. Set CMP0091 NEW before project().")
+endif()
+message(STATUS "aer_rdp runtime imports verified: no Debug CRT")

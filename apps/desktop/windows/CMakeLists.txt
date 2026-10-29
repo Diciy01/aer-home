@@ -1,5 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
+if(POLICY CMP0091)
+  # Must precede the first project()/language initialization. Otherwise
+  # aer_rdp's MSVC_RUNTIME_LIBRARY property is ignored in Flutter Debug.
+  cmake_policy(SET CMP0091 NEW)
+endif()
 project(aer_home_desktop LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
