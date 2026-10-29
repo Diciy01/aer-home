@@ -16,6 +16,9 @@ import 'connect_test.dart' show MemoryStore, pin;
 const number = '482913507';
 
 class FakeTools extends HostTools {
+  static final privateFixture = base64Url
+      .encode(List<int>.generate(32, (i) => i + 1))
+      .replaceAll('=', '');
   FakeTools()
     : super(
         hostExe: 'X:/none.exe',
@@ -24,7 +27,7 @@ class FakeTools extends HostTools {
       );
   @override
   Future<({String privateKey, String publicKey})> keygen() async =>
-      (privateKey: 'PRIVATE-FIXTURE', publicKey: 'PUBLIC-FIXTURE');
+      (privateKey: privateFixture, publicKey: 'PUBLIC-FIXTURE');
   @override
   Future<String> instance(String installId) async => 'ab' * 32;
   @override
@@ -66,6 +69,8 @@ class FakeHost implements HostRuntime {
 
 class DeviceClient extends GatewayClient {
   DeviceClient(super.server);
+  @override
+  Future<DeviceTrust> trust() async => const DeviceTrust();
   String? lastNumber;
   @override
   Future<DeviceEnrollment> enroll({
@@ -189,7 +194,7 @@ void main() {
       );
       final saved = jsonDecode(m.devices.value!) as Map<String, dynamic>;
       expect(saved['number'], number);
-      expect(saved['boxKey'], 'PRIVATE-FIXTURE');
+      expect(saved['boxKey'], FakeTools.privateFixture);
       expect(saved['permanent'], isNull);
       expect(m.devices.value, isNot(contains('ENROLL-TEST-CODE')));
       expect(m.hosts.single.init!['number'], number);

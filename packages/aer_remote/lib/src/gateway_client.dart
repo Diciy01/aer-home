@@ -234,9 +234,41 @@ class GatewayClient {
         'attemptId': sealed.attemptId,
         'ephPub': sealed.ephPub,
         'ciphertext': sealed.ciphertext,
+        'identityProof': ?sealed.identityProof,
         'clipboard': ?clipboard,
         'files': ?files,
       },
+    ) as Map<String, dynamic>,
+  );
+
+  Future<DeviceTrust> trust() async => DeviceTrust.fromJson(
+    await _call('GET', '/gw/v1/devices/me/trust') as Map<String, dynamic>,
+  );
+  Future<DeviceTrust> setUnattended(bool enabled) async => DeviceTrust.fromJson(
+    await _call('PUT', '/gw/v1/devices/me/trust', body: {'enabled': enabled})
+        as Map<String, dynamic>,
+  );
+  Future<TrustedDevice> trustCandidate(String number) async =>
+      TrustedDevice.fromJson(
+        await _call(
+          'POST',
+          '/gw/v1/devices/me/trust/candidate',
+          body: {'number': normalizeDeviceNumber(number)},
+        ) as Map<String, dynamic>,
+      );
+  Future<DeviceTrust> grantTrust(TrustedDevice device) async =>
+      DeviceTrust.fromJson(
+        await _call(
+          'POST',
+          '/gw/v1/devices/me/trust/grant',
+          body: {'number': device.number, 'fingerprint': device.fingerprint},
+        ) as Map<String, dynamic>,
+      );
+  Future<DeviceTrust> revokeTrust(String number) async => DeviceTrust.fromJson(
+    await _call(
+      'POST',
+      '/gw/v1/devices/me/trust/revoke',
+      body: {'number': number},
     ) as Map<String, dynamic>,
   );
 

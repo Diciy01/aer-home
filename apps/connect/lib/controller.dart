@@ -103,6 +103,41 @@ class ConnectController extends ChangeNotifier {
   int _generation = 0;
   StreamSubscription<ConnectionUpdate>? _updates;
   bool get live => connection != null && !state.terminal;
+  DeviceTrust? trust;
+  String trustError = '', identityFingerprint = '';
+
+  Future<void> refreshTrust() async {
+    if (device == null || api == null) return;
+    try {
+      trust = await api!.trust();
+      trustError = '';
+    } catch (e) {
+      trust = null;
+      trustError = describe(e);
+    }
+    changed();
+  }
+
+  Future<void> setUnattended(bool enabled) async {
+    trust = await api!.setUnattended(enabled);
+    trustError = '';
+    changed();
+  }
+
+  Future<TrustedDevice> trustCandidate(String number) =>
+      api!.trustCandidate(number);
+  Future<void> grantTrust(TrustedDevice candidate) async {
+    trust = await api!.grantTrust(candidate);
+    trustError = '';
+    changed();
+  }
+
+  Future<void> revokeTrust(String number) async {
+    trust = await api!.revokeTrust(number);
+    trustError = '';
+    changed();
+  }
+
   void changed() {
     if (!_disposed) notifyListeners();
   }
@@ -155,6 +190,9 @@ class ConnectController extends ChangeNotifier {
   // ---- AER Connect Anywhere: this computer as a device ----
 
   Future<void> _useDevice(DeviceProfile d) async {
+    trust = null;
+    trustError = '';
+    identityFingerprint = '';
     device = d;
     final s = GatewayServer.parse(d.address, d.fingerprint);
     api?.close();
@@ -168,6 +206,8 @@ class ConnectController extends ChangeNotifier {
     changed();
     await _startHost();
     await refresh();
+    identityFingerprint = await installationFingerprint(d.boxKey);
+    await refreshTrust();
   }
 
   Future<void> _startHost() async {
@@ -368,7 +408,9 @@ class ConnectController extends ChangeNotifier {
             ? 'ID ${formatDeviceNumber(n)}'
             : '${ch.name} · ${formatDeviceNumber(n)}';
         changed();
-        return current.connectDevice(await sealPassword(ch, password));
+        return current.connectDevice(
+          await sealPassword(ch, password, installationKey: device?.boxKey),
+        );
       });
       if (generation != _generation) {
         await conn.end();

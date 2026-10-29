@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'controller.dart';
 import 'device.dart';
+import 'trust_view.dart';
 
 /// «Этот компьютер»: ID, temporary password, Gateway status, incoming
 /// session with Stop, permanent access and host permissions (ADR-018).
@@ -226,7 +227,7 @@ class ThisComputerCard extends StatelessWidget {
                     : 'Постоянный пароль выключен',
               ),
               subtitle: const Text(
-                'Свой пароль вместо временного. Подтверждение на экране сохраняется.',
+                'Свой пароль вместо временного. Сам по себе не отключает подтверждение.',
               ),
               trailing: TextButton(
                 key: const Key('host-permanent'),
@@ -234,6 +235,7 @@ class ThisComputerCard extends StatelessWidget {
                 child: Text(d.permanent != null ? 'Изменить' : 'Включить'),
               ),
             ),
+            DeviceTrustView(c: c, run: run),
             ExpansionTile(
               key: const Key('host-options'),
               tilePadding: EdgeInsets.zero,

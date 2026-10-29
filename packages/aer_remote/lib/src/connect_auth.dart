@@ -8,6 +8,7 @@ import 'package:cryptography/cryptography.dart';
 /// ciphertext it cannot open. Mirrors core/internal/remoteengine/connectauth.go
 /// (wire format pinned by a shared test vector).
 const authVersion = 'aer-connect-auth/1';
+const identityProofVersion = 'aer-connect-identity/1';
 
 String _b64(List<int> b) => base64Url.encode(b).replaceAll('=', '');
 
@@ -17,8 +18,7 @@ Uint8List _unb64(String s) {
 }
 
 /// Spaces and dashes a user may type are ignored.
-String normalizeDeviceNumber(String s) =>
-    s.replaceAll(RegExp(r'[\s\- ]'), '');
+String normalizeDeviceNumber(String s) => s.replaceAll(RegExp(r'[\s\- ]'), '');
 
 /// 9 digits, never starting with 0.
 bool validDeviceNumber(String s) => RegExp(r'^[1-9][0-9]{8}$').hasMatch(s);
@@ -38,6 +38,7 @@ class ConnectChallenge {
     required this.name,
     required this.boxPub,
     required this.viewerNumber,
+    this.identityProof = '',
   });
 
   factory ConnectChallenge.fromJson(Map<String, dynamic> j) => ConnectChallenge(
@@ -46,6 +47,7 @@ class ConnectChallenge {
     name: j['name'] as String? ?? '',
     boxPub: j['boxPub'] as String,
     viewerNumber: j['viewerNumber'] as String? ?? '',
+    identityProof: j['identityProof'] as String? ?? '',
   );
 
   final String attemptId;
@@ -53,14 +55,21 @@ class ConnectChallenge {
   final String name;
   final String boxPub;
   final String viewerNumber;
+  final String identityProof;
 }
 
 /// A sealed password for exactly one attempt.
 class SealedPassword {
-  const SealedPassword(this.attemptId, this.ephPub, this.ciphertext);
+  const SealedPassword(
+    this.attemptId,
+    this.ephPub,
+    this.ciphertext, {
+    this.identityProof,
+  });
   final String attemptId;
   final String ephPub;
   final String ciphertext;
+  final String? identityProof;
 }
 
 /// Seals [password] for the attempt [c]. [ephemeral] is for test vectors
@@ -70,6 +79,7 @@ Future<SealedPassword> sealPassword(
   String password, {
   DateTime? now,
   SimpleKeyPair? ephemeral,
+  String? installationKey,
 }) async {
   final x = X25519();
   final eph = ephemeral ?? await x.newKeyPair();
@@ -93,11 +103,10 @@ Future<SealedPassword> sealPassword(
     ...ephPub,
     ...hostPub,
   ];
-  final key = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
-    secretKey: shared,
-    nonce: salt,
-    info: info,
-  );
+  final key = await Hkdf(
+    hmac: Hmac.sha256(),
+    outputLength: 32,
+  ).deriveKey(secretKey: shared, nonce: salt, info: info);
   final t = (now ?? DateTime.now()).millisecondsSinceEpoch;
   final plain = utf8.encode(jsonEncode({'v': 1, 'p': password, 't': t}));
   final box = await AesGcm.with256bits().encrypt(
@@ -106,11 +115,76 @@ Future<SealedPassword> sealPassword(
     nonce: List.filled(12, 0),
     aad: utf8.encode(c.attemptId),
   );
-  return SealedPassword(
+  final sealed = SealedPassword(
     c.attemptId,
     _b64(ephPub),
     _b64([...box.cipherText, ...box.mac.bytes]),
   );
+  if (installationKey == null || c.identityProof != identityProofVersion)
+    return sealed;
+  final viewer = await x.newKeyPairFromSeed(_unb64(installationKey));
+  final viewerPub = (await viewer.extractPublicKey()).bytes;
+  final identityShared = await x.sharedSecretKey(
+    keyPair: viewer,
+    remotePublicKey: SimplePublicKey(hostPub, type: KeyPairType.x25519),
+  );
+  final identityKey = await Hkdf(hmac: Hmac.sha256(), outputLength: 32)
+      .deriveKey(
+        secretKey: identityShared,
+        nonce: salt,
+        info: [
+          ...utf8.encode('$identityProofVersion\u0000'),
+          ...viewerPub,
+          ...hostPub,
+        ],
+      );
+  final message =
+      '$identityProofVersion\u0000${c.attemptId}\u0000${c.viewerNumber}\u0000${c.number}\u0000${sealed.ephPub}\u0000${sealed.ciphertext}';
+  final mac = await Hmac.sha256().calculateMac(
+    utf8.encode(message),
+    secretKey: identityKey,
+  );
+  return SealedPassword(
+    sealed.attemptId,
+    sealed.ephPub,
+    sealed.ciphertext,
+    identityProof: _b64(mac.bytes),
+  );
+}
+
+Future<String> installationFingerprint(String privateKey) async {
+  final key = await X25519().newKeyPairFromSeed(_unb64(privateKey));
+  final h = await Sha256().hash((await key.extractPublicKey()).bytes);
+  return h.bytes.map((v) => v.toRadixString(16).padLeft(2, '0')).join();
+}
+
+class TrustedDevice {
+  const TrustedDevice({
+    required this.number,
+    required this.name,
+    required this.fingerprint,
+    this.revoked = false,
+  });
+  factory TrustedDevice.fromJson(Map<String, dynamic> j) => TrustedDevice(
+    number: j['number'] as String,
+    name: j['name'] as String,
+    fingerprint: j['fingerprint'] as String,
+    revoked: j['revokedAt'] != null,
+  );
+  final String number, name, fingerprint;
+  final bool revoked;
+}
+
+class DeviceTrust {
+  const DeviceTrust({this.enabled = false, this.devices = const []});
+  factory DeviceTrust.fromJson(Map<String, dynamic> j) => DeviceTrust(
+    enabled: j['enabled'] == true,
+    devices: (j['devices'] as List)
+        .map((v) => TrustedDevice.fromJson(v as Map<String, dynamic>))
+        .toList(),
+  );
+  final bool enabled;
+  final List<TrustedDevice> devices;
 }
 
 /// Credentials handed to a newly registered device (once).
