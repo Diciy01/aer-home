@@ -20,7 +20,11 @@ void main(List<String> args) {
       '${File(Platform.resolvedExecutable).parent.path}${Platform.pathSeparator}connect.json',
     ),
     viewerFactory: (check) {
-      if (native == null) throw StateError('Компонент просмотра не найден. Переустановите полный пакет AER Connect.');
+      if (native == null) {
+        throw StateError(
+          'Компонент просмотра не найден. Переустановите полный пакет AER Connect.',
+        );
+      }
       return EmbeddedRdpViewer(native, canReconnect: check);
     },
   );

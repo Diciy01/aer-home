@@ -17,5 +17,12 @@ if ($manifest.shortcut -eq $expectedShortcut -and (Test-Path -LiteralPath $expec
     (Get-FileHash -LiteralPath $expectedShortcut -Algorithm SHA256).Hash -eq $manifest.shortcutHash) {
     Remove-Item -LiteralPath $expectedShortcut
 }
+# "Start with Windows" is the user's own setting; remove it only
+# when it points at this installation.
+$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$run = (Get-ItemProperty -LiteralPath $runKey -Name 'AER Connect' -ErrorAction SilentlyContinue).'AER Connect'
+if ($run -and $run.Trim('"') -ieq (Join-Path $root 'app\aer_connect.exe')) {
+    Remove-ItemProperty -LiteralPath $runKey -Name 'AER Connect'
+}
 Remove-Item -LiteralPath $manifestPath
-Write-Output 'Removed unchanged application files. Core, credentials, caches and added/modified files were retained.'
+Write-Output 'Removed unchanged application files. Core, credentials, the device registration, caches and added/modified files were retained.'

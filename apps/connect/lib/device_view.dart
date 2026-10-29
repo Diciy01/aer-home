@@ -91,11 +91,16 @@ class ThisComputerCard extends StatelessWidget {
                   child: SelectableText(
                     !d.allowIncoming
                         ? '— входящие выключены —'
+                        : h.link == HostLink.unavailable ||
+                              h.link == HostLink.revoked
+                        ? '— недоступен —'
                         : h.tempPassword.isEmpty
                         ? '…'
                         : h.tempPassword,
                     key: const Key('host-password'),
-                    style: d.allowIncoming ? mono : text.bodySmall,
+                    style: d.allowIncoming && h.tempPassword.isNotEmpty
+                        ? mono
+                        : text.bodySmall,
                   ),
                 ),
                 IconButton(
@@ -403,14 +408,22 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
   void dispose() {
     _id.dispose();
     _password.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
+  final _passwordFocus = FocusNode();
+
   Future<void> _connect() async {
     await c.connectById(_id.text, _password.text);
+    if (!mounted) return;
     if (c.viewer != null) {
       _password.clear();
-      if (mounted) await widget.onDesktop();
+      await widget.onDesktop();
+    } else if (c.error != null) {
+      // Never resend a refused password: ask for it again.
+      _password.clear();
+      _passwordFocus.requestFocus();
     }
   }
 
@@ -459,6 +472,7 @@ class _ConnectByIdCardState extends State<ConnectByIdCard> {
             TextField(
               key: const Key('remote-password'),
               controller: _password,
+              focusNode: _passwordFocus,
               enabled: !c.busy && !c.live,
               obscureText: true,
               enableSuggestions: false,
