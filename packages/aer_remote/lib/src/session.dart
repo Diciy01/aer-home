@@ -74,7 +74,12 @@ class RemoteConnection {
 
   /// Starts a session to [entityId] and returns once the local RDP port is
   /// ready (or throws). Viewers connect to `127.0.0.1:rdp.port`.
-  Future<void> start(String entityId, {int? minutes}) async {
+  Future<void> start(String entityId, {int? minutes}) =>
+      startWith(() => api.create(entityId, minutes: minutes));
+
+  /// Like [start] for a session created another way (AER Connect by ID and
+  /// password: `connectDevice` answers with the session).
+  Future<void> startWith(Future<RemoteSessionInfo> Function() create) async {
     await _checkRunning();
     final cred = api.credential;
     if (cred == null) {
@@ -84,7 +89,7 @@ class RemoteConnection {
         'Клиент не сопряжён с сервером',
       );
     }
-    session = await api.create(entityId, minutes: minutes);
+    session = await create();
     await _checkRunning();
     _emit(session!.state, 'Запрос отправлен');
     final deadline = DateTime.now().add(readyTimeout);

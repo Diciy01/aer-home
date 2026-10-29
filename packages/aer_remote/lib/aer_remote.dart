@@ -4,6 +4,7 @@
 /// computer through the owner's Remote Gateway, nothing about UI.
 library;
 
+export 'src/connect_auth.dart';
 export 'src/errors.dart';
 export 'src/models.dart';
 export 'src/pinning.dart';

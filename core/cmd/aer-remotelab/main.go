@@ -260,9 +260,22 @@ func run() error {
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	out, _ := json.Marshal(map[string]string{"gateway": gwURL, "fingerprint": fp, "pairingCode": pair.Code, "clientId": pair.Client.ID,
+	result := map[string]string{"gateway": gwURL, "fingerprint": fp, "pairingCode": pair.Code, "clientId": pair.Client.ID,
 		"hostId": pc.ID, "coreUrl": coreURL, "ownerToken": owner, "exchangeDir": acfg.Files.Dir,
-		"hostMode": acfg.ShadowSource, "rdpPort": strconv.Itoa(rdpPort)})
+		"hostMode": acfg.ShadowSource, "rdpPort": strconv.Itoa(rdpPort)}
+	if *anywhere {
+		shadowExe := ""
+		if *shadow != "" && !*desktopAcceptance {
+			shadowExe = *shadow
+		}
+		d, err := runAnywhere(ctx, dir, gwURL, fp, api, rdpPort, func() int { return int(live.Load()) }, shadowExe, self)
+		if err != nil {
+			return err
+		}
+		defer func() { d.stdin.Close(); <-d.done }()
+		result["enrollCode"], result["deviceNumber"], result["devicePasswordFile"] = d.enrollCode, d.number, d.passwordFile
+	}
+	out, _ := json.Marshal(result)
 	w := bufio.NewWriter(os.Stdout)
 	_, _ = w.Write(append(out, '\n'))
 	_ = w.Flush()

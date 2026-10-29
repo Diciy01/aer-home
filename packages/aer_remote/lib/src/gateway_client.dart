@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'connect_auth.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'pinning.dart';
@@ -105,10 +106,12 @@ class GatewayClient {
     }
     if (res.statusCode >= 300) {
       final e = env['error'] as Map<String, dynamic>? ?? const {};
+      final details = e['details'];
       throw RemoteEngineException(
         res.statusCode,
         e['code'] as String? ?? 'UNAVAILABLE',
         e['message'] as String? ?? '',
+        reason: details is Map ? details['reason'] as String? ?? '' : '',
       );
     }
     return env['data'];
@@ -175,6 +178,66 @@ class GatewayClient {
   Future<RemoteSessionInfo> end(String id) async => RemoteSessionInfo.fromJson(
     await _call('POST', '/gw/v1/sessions/${Uri.encodeComponent(id)}/end')
         as Map<String, dynamic>,
+  );
+
+  // ---- AER Connect Anywhere (ADR-018) ----
+
+  /// Registers this installation with the owner's enrollment code. The
+  /// answer carries both device credentials once; keep them in the OS store.
+  Future<DeviceEnrollment> enroll({
+    required String code,
+    required String deviceName,
+    required String boxPub,
+    required String instance,
+  }) async {
+    final d = await _call(
+      'POST',
+      '/gw/v1/devices/enroll',
+      body: {
+        'code': code.trim(),
+        'deviceName': deviceName,
+        'boxPub': boxPub,
+        'instance': instance,
+      },
+    ) as Map<String, dynamic>;
+    final e = DeviceEnrollment.fromJson(d);
+    credential = e.clientCredential;
+    return e;
+  }
+
+  /// This device as the server knows it (number, online, revoked …).
+  Future<DeviceInfo> me() async => DeviceInfo.fromJson(
+    await _call('GET', '/gw/v1/devices/me') as Map<String, dynamic>,
+  );
+
+  /// Opens one password attempt to the device [number].
+  Future<ConnectChallenge> challenge(String number) async =>
+      ConnectChallenge.fromJson(
+        await _call(
+          'POST',
+          '/gw/v1/connect/challenge',
+          body: {'number': normalizeDeviceNumber(number)},
+        ) as Map<String, dynamic>,
+      );
+
+  /// Redeems an attempt with the sealed password; answers after the
+  /// remote computer checked it (then the usual session follows).
+  Future<RemoteSessionInfo> connectDevice(
+    SealedPassword sealed, {
+    bool? clipboard,
+    bool? files,
+  }) async => RemoteSessionInfo.fromJson(
+    await _call(
+      'POST',
+      '/gw/v1/connect',
+      body: {
+        'attemptId': sealed.attemptId,
+        'ephPub': sealed.ephPub,
+        'ciphertext': sealed.ciphertext,
+        'clipboard': ?clipboard,
+        'files': ?files,
+      },
+    ) as Map<String, dynamic>,
   );
 
   void close() => _http.close(force: true);

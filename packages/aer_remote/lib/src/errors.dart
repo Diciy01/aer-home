@@ -1,6 +1,11 @@
 /// An error answer of the Gateway (or Core behind it).
 class RemoteEngineException implements Exception {
-  const RemoteEngineException(this.status, this.code, this.message);
+  const RemoteEngineException(
+    this.status,
+    this.code,
+    this.message, {
+    this.reason = '',
+  });
 
   /// HTTP status; 0 when the server was not reached.
   final int status;
@@ -8,6 +13,9 @@ class RemoteEngineException implements Exception {
   /// Machine code from the error envelope (UNAUTHORIZED, CONFLICT, …).
   final String code;
   final String message;
+
+  /// Stable machine reason from error details (bad_password, offline, …).
+  final String reason;
 
   /// The credential is wrong, revoked or the address is banned: pairing
   /// again is the only way forward.
