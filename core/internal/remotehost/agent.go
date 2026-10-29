@@ -41,16 +41,124 @@ type Agent struct {
 	Prompt func(ctx context.Context, text string) bool
 	// Connections counts established RDP connections (-1: unknown).
 	Connections func() int
+	// Device mode (AER Connect, ADR-018): every session must carry a sealed
+	// password that Auth checks before the local prompt; the credential is
+	// held in memory (Token) instead of a token file.
+	Auth     Authenticator
+	Token    string
+	Instance string
+	// OnStatus reports connection and session changes (may be nil).
+	OnStatus func(Status)
 
 	mu      sync.Mutex
 	session *openSession
+	status  Status
 }
 
 type openSession struct {
 	id        string
+	viewer    string
 	expiresAt time.Time
 	connected bool
 	cancel    context.CancelFunc
+}
+
+// Authenticator checks a device password attempt (ok, or a failure code).
+type Authenticator interface {
+	Verify(a remoteengine.ConnectAuth) (ok bool, code string)
+}
+
+// Gateway link states reported in Status.
+const (
+	LinkConnecting   = "connecting"
+	LinkOnline       = "online"
+	LinkReconnecting = "reconnecting"
+	LinkRevoked      = "revoked"
+	LinkStopped      = "stopped"
+)
+
+// Status is what the host shows its user.
+type Status struct {
+	Link    string         `json:"link"`
+	Error   string         `json:"error,omitempty"`
+	Session *SessionStatus `json:"session"`
+}
+
+// SessionStatus describes the incoming session (one at a time).
+type SessionStatus struct {
+	ID     string    `json:"id"`
+	Viewer string    `json:"viewer"`
+	State  string    `json:"state"` // verifying | prompt | active | connected
+	Since  time.Time `json:"since"`
+}
+
+func (a *Agent) setStatus(fn func(*Status)) {
+	a.mu.Lock()
+	before := a.status
+	if before.Session != nil {
+		cp := *before.Session
+		before.Session = &cp
+	}
+	fn(&a.status)
+	st := a.status
+	if st.Session != nil {
+		cp := *st.Session
+		st.Session = &cp
+	}
+	cb := a.OnStatus
+	a.mu.Unlock()
+	if cb != nil && (before.Link != st.Link || before.Error != st.Error || !sameSession(before.Session, st.Session)) {
+		cb(st)
+	}
+}
+
+func sameSession(a, b *SessionStatus) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func (a *Agent) sessionState(id, state, viewer string) {
+	a.setStatus(func(s *Status) {
+		if state == "" {
+			if s.Session != nil && s.Session.ID == id {
+				s.Session = nil
+			}
+			return
+		}
+		if s.Session == nil || s.Session.ID != id {
+			s.Session = &SessionStatus{ID: id, Viewer: viewer, Since: time.Now().UTC()}
+		} else {
+			cp := *s.Session
+			s.Session = &cp
+		}
+		s.Session.State = state
+	})
+}
+
+// CurrentStatus returns the last status.
+func (a *Agent) CurrentStatus() Status {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	st := a.status
+	if st.Session != nil {
+		cp := *st.Session
+		st.Session = &cp
+	}
+	return st
+}
+
+// StopSession ends the current incoming session at the host user's request.
+func (a *Agent) StopSession(ctx context.Context) bool {
+	a.mu.Lock()
+	s := a.session
+	a.mu.Unlock()
+	if s == nil {
+		return false
+	}
+	a.closeSession(ctx, s.id, "Сеанс остановлен пользователем компьютера")
+	return true
 }
 
 // New builds the agent for a validated config.
@@ -108,6 +216,9 @@ func (a *Agent) SetRunner(r Runner, start func([]string) (func(), error)) {
 }
 
 func (a *Agent) token() (string, error) {
+	if a.Token != "" {
+		return a.Token, nil
+	}
 	b, err := os.ReadFile(a.cfg.TokenFile)
 	return strings.TrimSpace(string(b)), err
 }
@@ -180,6 +291,12 @@ func (a *Agent) Hello(ctx context.Context) error {
 			"files": managed && a.cfg.Files.Enabled, "apps": false},
 		"approval": a.cfg.Approval, "ready": ready, "reason": reason, "username": a.backend.Username(),
 	}
+	if a.Auth != nil {
+		body["features"] = []string{remoteengine.FeatureConnectAuth}
+	}
+	if a.Instance != "" {
+		body["instance"] = a.Instance
+	}
 	if a.cfg.Files.Enabled {
 		body["filesPort"] = a.cfg.Files.Port
 	}
@@ -244,13 +361,39 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Сеанс через Gateway, но gatewayUrl агента не настроен", nil)
 		return
 	}
+	viewer := ""
+	if a.Auth != nil || c.Auth != nil {
+		// Device mode: no password, no session. The verdict goes to Core
+		// before anything is shown or opened on this computer.
+		if c.Auth == nil || a.Auth == nil {
+			a.event(ctx, c.SessionID, remoteengine.EventFailed, "Этот компьютер принимает подключения только по ID и паролю", nil)
+			return
+		}
+		viewer = c.Auth.ViewerName
+		a.sessionState(c.SessionID, "verifying", viewer)
+		ok, code := a.Auth.Verify(*c.Auth)
+		if !ok {
+			a.sessionState(c.SessionID, "", "")
+			a.authEvent(ctx, c.SessionID, remoteengine.EventAuthFailed, code)
+			return
+		}
+		if !a.authEvent(ctx, c.SessionID, remoteengine.EventAuthOK, "") {
+			a.sessionState(c.SessionID, "", "")
+			return
+		}
+	}
 	if a.cfg.Approval == "prompt" {
 		a.event(ctx, c.SessionID, remoteengine.EventAwaitingApproval, "", nil)
+		a.sessionState(c.SessionID, "prompt", viewer)
 		prompt := "Разрешить удалённое подключение AER HOME к этому компьютеру?"
+		if viewer != "" {
+			prompt = "Подключение через AER Connect от: " + viewer + ". Разрешайте, только если знаете, кто подключается."
+		}
 		if a.cfg.Backend == "windows-shadow" {
-			prompt = fmt.Sprintf("Разрешить один сеанс AER HOME?\n\nПросмотр экрана: да\nМышь и клавиатура: %s\nТекстовый буфер: %s\nПапка обмена файлами: %s\n\nПостоянный доступ не предоставляется. Закройте окно активного доступа, чтобы немедленно завершить сеанс. Блокировка Windows и защищённый экран UAC завершают доступ.", permissionLabel(c.Allowed.Input), permissionLabel(c.Allowed.Clipboard && a.cfg.Clipboard), permissionLabel(c.Allowed.Files && a.cfg.Files.Enabled))
+			prompt = fmt.Sprintf("%s\n\nПросмотр экрана: да\nМышь и клавиатура: %s\nТекстовый буфер: %s\nПапка обмена файлами: %s\n\nПостоянный доступ не предоставляется. Закройте окно активного доступа, чтобы немедленно завершить сеанс. Блокировка Windows и защищённый экран UAC завершают доступ.", shadowHeader(viewer), permissionLabel(c.Allowed.Input), permissionLabel(c.Allowed.Clipboard && a.cfg.Clipboard), permissionLabel(c.Allowed.Files && a.cfg.Files.Enabled))
 		}
 		if !a.Prompt(ctx, prompt) {
+			a.sessionState(c.SessionID, "", "")
 			a.event(ctx, c.SessionID, remoteengine.EventDenied, "Пользователь компьютера отклонил подключение", nil)
 			return
 		}
@@ -263,6 +406,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		}
 		err := a.call(ctx, http.MethodPost, "/remote/agent/sessions/"+c.SessionID+"/events", map[string]string{"event": remoteengine.EventApproved}, &current)
 		if err != nil || (current.State != remoteengine.StatePending && current.State != remoteengine.StateAwaitingApproval) {
+			a.sessionState(c.SessionID, "", "")
 			return
 		}
 	} else {
@@ -279,6 +423,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 	}
 	if openErr != nil {
 		_ = a.backend.Close(ctx)
+		a.sessionState(c.SessionID, "", "")
 		a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось включить RDP: "+openErr.Error(), nil)
 		return
 	}
@@ -293,6 +438,7 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		a.mu.Unlock()
 		if err := a.Hello(ctx); err != nil {
 			_ = a.backend.Close(ctx)
+			a.sessionState(c.SessionID, "", "")
 			a.event(ctx, c.SessionID, remoteengine.EventFailed, "Не удалось закрепить сертификат нового сеанса", nil)
 			return
 		}
@@ -314,10 +460,11 @@ func (a *Agent) openSession(ctx context.Context, c Command) {
 		}
 	}
 	sctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
-	s := &openSession{id: c.SessionID, expiresAt: c.ExpiresAt, cancel: cancel}
+	s := &openSession{id: c.SessionID, viewer: viewer, expiresAt: c.ExpiresAt, cancel: cancel}
 	a.mu.Lock()
 	a.session = s
 	a.mu.Unlock()
+	a.sessionState(c.SessionID, "active", viewer)
 	a.event(ctx, c.SessionID, remoteengine.EventReady, "", extra)
 	go a.watch(sctx, s)
 	if c.Relay {
@@ -360,9 +507,11 @@ func (a *Agent) watch(ctx context.Context, s *openSession) {
 			switch {
 			case n > 0 && !s.connected:
 				s.connected = true
+				a.sessionState(s.id, "connected", s.viewer)
 				a.event(ctx, s.id, remoteengine.EventConnected, fmt.Sprintf("Установлено соединений RDP: %d", n), nil)
 			case n == 0 && s.connected:
 				s.connected = false
+				a.sessionState(s.id, "active", s.viewer)
 				a.event(ctx, s.id, remoteengine.EventDisconnected, "Соединение RDP закрыто или прервано", nil)
 			}
 		}
@@ -378,6 +527,7 @@ func (a *Agent) closeSession(ctx context.Context, id, reason string) {
 	}
 	a.session = nil
 	a.mu.Unlock()
+	a.sessionState(id, "", "")
 	s.cancel()
 	if a.files != nil {
 		a.files.Stop()
@@ -406,9 +556,16 @@ func (a *Agent) Run(ctx context.Context) error {
 	}()
 	helloT := time.NewTicker(20 * time.Second)
 	defer helloT.Stop()
+	defer a.setStatus(func(s *Status) {
+		if s.Link != LinkRevoked {
+			s.Link = LinkStopped
+		}
+	})
+	a.setStatus(func(s *Status) { s.Link = LinkConnecting })
 	cmds := make(chan Command, 8)
 	pollErr := make(chan error, 1)
 	go func() {
+		retry := NewBackoff(time.Second, time.Minute)
 		for ctx.Err() == nil {
 			var res struct {
 				Commands []Command `json:"commands"`
@@ -419,25 +576,50 @@ func (a *Agent) Run(ctx context.Context) error {
 					pollErr <- err
 					return
 				}
-				select { // Core away: retry calmly
+				if ctx.Err() != nil {
+					return
+				}
+				a.setStatus(func(s *Status) {
+					if s.Link == LinkOnline || s.Link == LinkReconnecting {
+						s.Link = LinkReconnecting
+					} else {
+						s.Link = LinkConnecting
+					}
+					s.Error = linkError(err)
+				})
+				select { // Core or the network away: exponential backoff with jitter
 				case <-ctx.Done():
-				case <-time.After(3 * time.Second):
+				case <-time.After(retry.Next()):
 				}
 				continue
 			}
+			retry.Reset()
+			a.setStatus(func(s *Status) { s.Link, s.Error = LinkOnline, "" })
 			for _, c := range res.Commands {
-				cmds <- c
+				select {
+				case cmds <- c:
+				case <-ctx.Done():
+					return
+				}
 			}
 		}
 	}()
 	if err := a.Hello(ctx); err != nil {
+		var ce *CoreError
+		if errors.As(err, &ce) && ce.Revoked() {
+			a.setStatus(func(s *Status) { s.Link, s.Error = LinkRevoked, "Устройство отозвано" })
+			return fmt.Errorf("credential rejected by Core, stopping: %w", err)
+		}
 		a.log.Warn("hello", "err", err)
+	} else {
+		a.setStatus(func(s *Status) { s.Link, s.Error = LinkOnline, "" })
 	}
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case err := <-pollErr:
+			a.setStatus(func(s *Status) { s.Link, s.Error = LinkRevoked, "Устройство отозвано" })
 			return fmt.Errorf("credential rejected by Core, stopping: %w", err)
 		case c := <-cmds:
 			a.Handle(ctx, c)
@@ -445,6 +627,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			if err := a.Hello(ctx); err != nil {
 				var ce *CoreError
 				if errors.As(err, &ce) && ce.Revoked() {
+					a.setStatus(func(s *Status) { s.Link, s.Error = LinkRevoked, "Устройство отозвано" })
 					return fmt.Errorf("credential rejected by Core, stopping: %w", err)
 				}
 				a.log.Warn("hello", "err", err)
@@ -453,9 +636,44 @@ func (a *Agent) Run(ctx context.Context) error {
 	}
 }
 
+// authEvent reports a password verdict; true when Core accepted it and the
+// session may continue to the local prompt.
+func (a *Agent) authEvent(ctx context.Context, id, ev, code string) bool {
+	var res struct {
+		State remoteengine.State `json:"state"`
+	}
+	err := a.call(ctx, http.MethodPost, "/remote/agent/sessions/"+id+"/events", map[string]string{"event": ev, "code": code}, &res)
+	if err != nil {
+		a.log.Warn("report auth verdict", "err", err)
+		return false
+	}
+	return ev == remoteengine.EventAuthOK && !res.State.Terminal()
+}
+
+func linkError(err error) string {
+	var ce *CoreError
+	if errors.As(err, &ce) {
+		if ce.Status == http.StatusBadGateway || ce.Status == http.StatusServiceUnavailable {
+			return "Сервер AER недоступен"
+		}
+		return "Ошибка сервера: " + ce.Message
+	}
+	if strings.Contains(err.Error(), "certificate") || strings.Contains(err.Error(), "pinned") {
+		return "Сертификат сервера не совпадает с закреплённым"
+	}
+	return "Нет связи с сервером"
+}
+
 func (a *Agent) commandPrompt(ctx context.Context, text string) bool {
 	argv := append(append([]string{}, a.cfg.PromptCommand...), "--text="+text)
 	ctx, cancel := context.WithTimeout(ctx, 110*time.Second)
 	defer cancel()
 	return exec.CommandContext(ctx, argv[0], argv[1:]...).Run() == nil
+}
+
+func shadowHeader(viewer string) string {
+	if viewer == "" {
+		return "Разрешить один сеанс AER HOME?"
+	}
+	return "Разрешить подключение AER Connect?\nКто подключается: " + viewer + "\nРазрешайте, только если знаете этого человека."
 }
