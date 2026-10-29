@@ -77,6 +77,9 @@ type Command struct {
 	// Relay: the client comes through the Gateway; the agent parks
 	// outgoing tunnel legs instead of waiting for inbound connections.
 	Relay bool `json:"relay,omitempty"`
+	// Auth: a device password attempt (ADR-018) the host checks itself
+	// before asking its user; nil for sessions without a device password.
+	Auth *ConnectAuth `json:"auth,omitempty"`
 }
 
 // Agent session events.
@@ -89,6 +92,9 @@ const (
 	EventDisconnected     = "disconnected"
 	EventClosed           = "closed"
 	EventFailed           = "failed"
+	// Device password verdict (ADR-018), reported before the local prompt.
+	EventAuthOK     = "auth_ok"
+	EventAuthFailed = "auth_failed"
 )
 
 // AgentEvent is what the host agent reports about a session.
@@ -97,6 +103,8 @@ type AgentEvent struct {
 	Password   string `json:"password"`
 	FilesToken string `json:"filesToken"`
 	Message    string `json:"message"`
+	// Code: machine reason of auth_failed (AuthBadPassword, AuthLocked, вЂ¦).
+	Code string `json:"code,omitempty"`
 }
 
 // Grant is the one-time connection data for the client.

@@ -385,7 +385,7 @@ func (s *Service) forClient(h Host, c Client) Host {
 	h.Effective = h.Effective.And(Caps{Desktop: true, Input: true, Clipboard: c.Clipboard, Files: c.Files})
 	if h.Agent != nil {
 		a := *h.Agent
-		a.Address, a.Port, a.FilesPort, a.CertPEM, a.Username = "", 0, 0, "", ""
+		a.Address, a.Port, a.FilesPort, a.CertPEM, a.Username, a.Instance = "", 0, 0, "", "", ""
 		h.Agent = &a
 	}
 	if h.ActiveSession != nil && h.ActiveSession.ClientID != c.ID {
@@ -405,7 +405,7 @@ func (s *Service) ClientCreate(ctx context.Context, c Client, in NewSession, key
 	if key != "" {
 		key = "gw:" + c.ID + ":" + key
 	}
-	return s.create(ctx, in, key, remoteengine.RouteRelay, Caps{Desktop: true, Input: true, Clipboard: c.Clipboard, Files: c.Files})
+	return s.create(ctx, in, key, remoteengine.RouteRelay, Caps{Desktop: true, Input: true, Clipboard: c.Clipboard, Files: c.Files}, nil)
 }
 
 // ClientSession, ClientGrant and ClientEnd act on the client's own session.

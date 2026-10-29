@@ -71,7 +71,7 @@ func newFx(t *testing.T, mut ...func(*config.Remote)) *fx {
 			t.Fatal(err)
 		}
 	}
-	if n, err := storage.Migrate(ctx, db, Name, migrations); err != nil || n != 2 {
+	if n, err := storage.Migrate(ctx, db, Name, migrations); err != nil || n != len(migrations) {
 		t.Fatalf("migrate %d %v", n, err)
 	}
 	return &fx{ctx: ctx, dbPath: path, reg: reg, mon: mm.(*monitoring.Module).Service(),

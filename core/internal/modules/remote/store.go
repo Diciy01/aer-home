@@ -78,5 +78,34 @@ CREATE TABLE remote_clients (
 
 ALTER TABLE remote_sessions ADD COLUMN route TEXT NOT NULL DEFAULT 'direct';
 CREATE INDEX remote_sessions_client ON remote_sessions(client_id, created_at);
+`}, {Version: 3, Name: "remote_connect_devices", SQL: `
+CREATE TABLE remote_enrollments (
+	id         TEXT PRIMARY KEY,
+	name       TEXT NOT NULL,
+	code_hash  BLOB UNIQUE,
+	max_uses   INTEGER NOT NULL,
+	uses       INTEGER NOT NULL DEFAULT 0,
+	expires_at INTEGER NOT NULL,
+	created_at INTEGER NOT NULL,
+	revoked_at INTEGER
+);
+
+CREATE TABLE remote_devices (
+	id            TEXT PRIMARY KEY,
+	number        TEXT NOT NULL UNIQUE,
+	name          TEXT NOT NULL,
+	entity_id     TEXT NOT NULL UNIQUE,
+	agent_id      TEXT NOT NULL UNIQUE,
+	client_id     TEXT NOT NULL UNIQUE,
+	box_pub       TEXT NOT NULL,
+	instance      TEXT NOT NULL,
+	enrollment_id TEXT NOT NULL DEFAULT '',
+	created_at    INTEGER NOT NULL,
+	last_seen_at  INTEGER,
+	conflict_at   INTEGER,
+	revoked_at    INTEGER
+);
+
+ALTER TABLE remote_sessions ADD COLUMN auth_state TEXT NOT NULL DEFAULT '';
 `},
 }

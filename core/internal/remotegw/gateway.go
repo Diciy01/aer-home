@@ -269,6 +269,12 @@ func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+apiPrefix+"/health", g.health)
 	mux.HandleFunc("POST "+apiPrefix+"/pair", g.pair)
+	// AER Connect Anywhere (ADR-018): self-registration with an owner's
+	// enrollment code, then connect by device number and sealed password.
+	mux.HandleFunc("POST "+apiPrefix+"/devices/enroll", g.enroll)
+	mux.HandleFunc("GET "+apiPrefix+"/devices/me", g.forward(http.MethodGet, "/remote/gw/client/device"))
+	mux.HandleFunc("POST "+apiPrefix+"/connect/challenge", g.forward(http.MethodPost, "/remote/gw/client/connect/challenge"))
+	mux.HandleFunc("POST "+apiPrefix+"/connect", g.forward(http.MethodPost, "/remote/gw/client/connect"))
 	mux.HandleFunc("GET "+apiPrefix+"/hosts", g.forward(http.MethodGet, "/remote/gw/client/hosts"))
 	mux.HandleFunc("POST "+apiPrefix+"/sessions", g.forward(http.MethodPost, "/remote/gw/client/sessions"))
 	mux.HandleFunc("GET "+apiPrefix+"/sessions/{id}", g.forward(http.MethodGet, "/remote/gw/client/sessions/{id}"))
@@ -416,6 +422,24 @@ func (g *Gateway) pair(w http.ResponseWriter, r *http.Request) {
 	st, raw, err := g.coreCall(r.Context(), http.MethodPost, "/remote/gw/pair", body, http.Header{"X-Aer-Client-Addr": {addrOf(r)}}, nil)
 	if err == nil && st == http.StatusOK {
 		g.log.Info("client paired", "addr", addrOf(r))
+	}
+	g.relay(w, r, st, raw, err)
+}
+
+// enroll: a new installation registers with an enrollment code. Limited
+// per address like pairing (successful attempts count too).
+func (g *Gateway) enroll(w http.ResponseWriter, r *http.Request) {
+	if !g.lim.Pair(addrOf(r)) {
+		writeErr(w, http.StatusTooManyRequests, "UNAVAILABLE", "Слишком много попыток регистрации — повторите позже")
+		return
+	}
+	body, ok := readBody(w, r)
+	if !ok {
+		return
+	}
+	st, raw, err := g.coreCall(r.Context(), http.MethodPost, "/remote/gw/devices/enroll", body, http.Header{"X-Aer-Client-Addr": {addrOf(r)}}, nil)
+	if err == nil && st == http.StatusOK {
+		g.log.Info("device enrolled", "addr", addrOf(r))
 	}
 	g.relay(w, r, st, raw, err)
 }

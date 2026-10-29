@@ -58,6 +58,11 @@ type HostInfo struct {
 	Reason   string `json:"reason"`
 	// Username for RDP; empty when the OS account is used (Windows).
 	Username string `json:"username"`
+	// Features: optional protocol features, e.g. connect-auth/1 (ADR-018).
+	Features []string `json:"features,omitempty"`
+	// Instance: hash of the installation and machine; a different value
+	// for the same device credential means a cloned installation.
+	Instance string `json:"instance,omitempty"`
 }
 
 // Policy is the owner's restriction for a host (intersected with Caps).

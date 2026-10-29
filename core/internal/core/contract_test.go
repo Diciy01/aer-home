@@ -113,7 +113,7 @@ func TestImplementedRoutesMatchContract(t *testing.T) {
 }
 
 func TestContractVersion(t *testing.T) {
-	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.11.") {
+	if v := loadOpenAPI(t).Info.Version; !strings.HasPrefix(v, "0.12.") {
 		t.Fatalf("openapi info.version = %q; bump deliberately with an ADR", v)
 	}
 }

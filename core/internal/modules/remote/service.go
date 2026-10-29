@@ -53,6 +53,8 @@ type Service struct {
 	issued   map[string]int         // sessionID → tickets issued (limit)
 	fails    map[string]*failures   // clientID → recent credential failures
 	gw       *GatewayInfo           // last report of the Remote Gateway
+	attempts map[string]*attempt    // attemptID → open device password attempt
+	authWait map[string]chan authVerdict
 }
 
 type secret struct {
@@ -75,7 +77,8 @@ func NewService(db *sql.DB, reg registry.Reader, mon *monitoring.Service, cfg co
 	}
 	return &Service{db: db, reg: reg, mon: mon, cfg: cfg, log: log, now: now,
 		secrets: map[string]*secret{}, queues: map[string]*agentQueue{},
-		tickets: map[[32]byte]*ticket{}, issued: map[string]int{}, fails: map[string]*failures{}}
+		tickets: map[[32]byte]*ticket{}, issued: map[string]int{}, fails: map[string]*failures{},
+		attempts: map[string]*attempt{}, authWait: map[string]chan authVerdict{}}
 }
 
 func ms(t time.Time) int64 { return t.UTC().UnixMilli() }
@@ -264,6 +267,9 @@ func (s *Service) Host(ctx context.Context, entityID string) (Host, error) {
 		h.LastSession = &l[0]
 	}
 	h.CanConnect, h.Reason = s.readiness(h)
+	if d, ok := s.deviceByEntity(ctx, entityID); ok && (d.RevokedAt != nil || d.ConflictAt != nil) {
+		h.CanConnect, h.Reason = false, "Устройство AER Connect отозвано или его учётные данные скопированы на другую установку"
+	}
 	return h, nil
 }
 

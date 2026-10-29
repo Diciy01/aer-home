@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: AER HOME Core API
-  version: 0.11.1
+  version: 0.12.0
   description: >
     Core REST contract. Operations carry `x-aer-status`: `implemented` operations are
     served by aer-core and checked by core/internal/core/contract_test.go; `planned`
@@ -49,6 +49,13 @@ info:
     the Gateway reports its certificate fingerprint (GET /remote/gateway for the owner).
     Additive: every 0.10.0 client keeps working on the direct route.
     See docs/adr/ADR-017-remote-engine-gateway.md.
+    0.12.0 — AER Connect Anywhere (M14.4): devices register themselves with an owner's
+    enrollment code (/remote/enrollments, /remote/devices, /remote/gw/devices/enroll) and get a
+    public 9-digit number; viewers open a single-use password attempt by number and send the
+    password sealed to the host's X25519 key (/remote/gw/client/connect[/challenge]); the host
+    checks it before its local prompt. Host hello gains optional `features`, `instance`; agent
+    events gain `auth_ok`/`auth_failed` with `code`; commands gain `auth`. Additive.
+    See docs/adr/ADR-018-connect-anywhere.md.
 servers:
   - url: http://127.0.0.1:8787/api/v1
     description: Local development Core (loopback only)
@@ -2197,6 +2204,182 @@ paths:
                       data: { type: object }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/enrollments:
+    get:
+      x-aer-status: implemented
+      summary: "AER Connect enrollment codes (never the codes), newest first (ADR-018)"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteEnrollment' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      x-aer-status: implemented
+      summary: "Issue an enrollment code for up to maxUses new AER Connect devices; the code is shown once"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [name], properties: { name: { type: string }, maxUses: { type: integer, minimum: 1, maximum: 100 }, hours: { type: integer, minimum: 1, maximum: 720 } } }
+      responses:
+        '201':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [enrollment, code], properties: { enrollment: { $ref: '#/components/schemas/RemoteEnrollment' }, code: { type: string } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/enrollments/{id}/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Stop an enrollment code (registered devices stay)"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200': { description: OK }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/devices:
+    get:
+      x-aer-status: implemented
+      summary: "Registered AER Connect devices with their public numbers and status"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/RemoteDevice' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /remote/devices/{id}/revoke:
+    post:
+      x-aer-status: implemented
+      summary: "Revoke a device: host and viewer credentials, its sessions; the number is never reused"
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/devices/enroll:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: a new AER Connect installation registers with an enrollment code (credentials returned once)"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [code, deviceName, boxPub, instance], properties: { code: { type: string }, deviceName: { type: string }, boxPub: { type: string, description: "X25519 public key, base64url" }, instance: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [deviceId, number, name, entityId, agentToken, clientCredential] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /remote/gw/client/device:
+    get:
+      x-aer-status: implemented
+      summary: "Gateway: the device behind this client credential (number, status)"
+      security:
+        - gatewayAuth: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteDevice' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /remote/gw/client/connect/challenge:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: open one password attempt to a device by number (host key, single-use attempt id, 60 s)"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [number], properties: { number: { type: string } } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { type: object, required: [attemptId, number, name, boxPub, viewerNumber, expiresAt] }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /remote/gw/client/connect:
+    post:
+      x-aer-status: implemented
+      summary: "Gateway: redeem an attempt with the password sealed to the host key; answers after the host's verdict"
+      security:
+        - gatewayAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [attemptId, ephPub, ciphertext], properties: { attemptId: { type: string }, ephPub: { type: string }, ciphertext: { type: string }, clipboard: { type: [boolean, 'null'] }, files: { type: [boolean, 'null'] }, minutes: { type: integer } } }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessEnvelope'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/RemoteSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        
+        '403': { description: "Wrong password, used attempt or incoming sessions disabled" }
+        '429': { description: "Too many attempts" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer }
@@ -3322,6 +3505,33 @@ components:
         client: { $ref: '#/components/schemas/RemoteClient' }
         code: { type: string, description: "XXXX-XXXX-XXXX, one use, shown once" }
         expiresAt: { type: string, format: date-time }
+    RemoteEnrollment:
+      type: object
+      required: [id, name, maxUses, uses, expiresAt, createdAt, revokedAt, active]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        maxUses: { type: integer }
+        uses: { type: integer }
+        expiresAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        active: { type: boolean }
+    RemoteDevice:
+      type: object
+      required: [id, number, name, entityId, clientId, createdAt, lastSeenAt, conflictAt, revokedAt, online, status]
+      properties:
+        id: { type: string }
+        number: { type: string, description: "public 9-digit device ID (not a secret)" }
+        name: { type: string }
+        entityId: { type: string }
+        clientId: { type: string }
+        createdAt: { type: string, format: date-time }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        conflictAt: { type: [string, 'null'], format: date-time }
+        revokedAt: { type: [string, 'null'], format: date-time }
+        online: { type: boolean }
+        status: { type: string, enum: [online, offline, revoked, conflict] }
     RemoteGatewayInfo:
       type: object
       required: [certSha256, version, seenAt, online]

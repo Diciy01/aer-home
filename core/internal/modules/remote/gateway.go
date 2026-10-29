@@ -32,6 +32,11 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/clients/{id}/pairing", m.repairClient)
 	r.Handle(http.MethodPost, "/remote/clients/{id}/revoke", m.revokeClient)
 	r.Handle(http.MethodGet, "/remote/gateway", m.gatewayInfo)
+	r.Handle(http.MethodGet, "/remote/enrollments", m.enrollments)
+	r.Handle(http.MethodPost, "/remote/enrollments", m.createEnrollment)
+	r.Handle(http.MethodPost, "/remote/enrollments/{id}/revoke", m.revokeEnrollment)
+	r.Handle(http.MethodGet, "/remote/devices", m.devices)
+	r.Handle(http.MethodPost, "/remote/devices/{id}/revoke", m.revokeDevice)
 
 	gw := httpapi.Authorize("gateway", m.gatewayAuthorizer)
 	r.Handle(http.MethodPost, "/remote/gw/pair", m.gwPair, gw)
@@ -46,6 +51,104 @@ func (m *Module) registerClientRoutes(r *httpapi.Router) {
 	r.Handle(http.MethodPost, "/remote/gw/tunnel/event", m.gwTunnelEvent, gw)
 	r.Handle(http.MethodPost, "/remote/gw/alive", m.gwAlive, gw)
 	r.Handle(http.MethodPost, "/remote/gw/info", m.gwInfo, gw)
+	r.Handle(http.MethodPost, "/remote/gw/devices/enroll", m.gwEnroll, gw)
+	r.Handle(http.MethodGet, "/remote/gw/client/device", m.gwDevice, gw)
+	r.Handle(http.MethodPost, "/remote/gw/client/connect/challenge", m.gwChallenge, gw)
+	r.Handle(http.MethodPost, "/remote/gw/client/connect", m.gwConnect, gw)
+}
+
+func (m *Module) enrollments(w http.ResponseWriter, r *http.Request) error {
+	e, err := m.svc.Enrollments(r.Context())
+	if err != nil {
+		return apiError(err)
+	}
+	return ok(w, r, e)
+}
+
+func (m *Module) createEnrollment(w http.ResponseWriter, r *http.Request) error {
+	var in EnrollmentInput
+	if err := decode(r, &in); err != nil {
+		return err
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	e, err := m.svc.CreateEnrollment(r.Context(), in)
+	if err != nil {
+		return apiError(err)
+	}
+	httpapi.WriteData(w, r, http.StatusCreated, e)
+	return nil
+}
+
+func (m *Module) revokeEnrollment(w http.ResponseWriter, r *http.Request) error {
+	e, err := m.svc.RevokeEnrollment(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return apiError(err)
+	}
+	return ok(w, r, e)
+}
+
+func (m *Module) devices(w http.ResponseWriter, r *http.Request) error {
+	d, err := m.svc.Devices(r.Context())
+	if err != nil {
+		return apiError(err)
+	}
+	return ok(w, r, d)
+}
+
+func (m *Module) revokeDevice(w http.ResponseWriter, r *http.Request) error {
+	d, err := m.svc.RevokeDevice(r.Context(), r.PathValue("id"))
+	if err != nil {
+		return apiError(err)
+	}
+	return ok(w, r, d)
+}
+
+func (m *Module) gwEnroll(w http.ResponseWriter, r *http.Request) error {
+	var in EnrollInput
+	if err := decode(r, &in); err != nil {
+		return err
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	e, err := m.svc.Enroll(r.Context(), in, clientAddr(r))
+	if err != nil {
+		return apiError(err)
+	}
+	return ok(w, r, e)
+}
+
+func (m *Module) gwDevice(w http.ResponseWriter, r *http.Request) error {
+	return m.withClient(w, r, func(ctx context.Context, c Client) (any, error) {
+		return m.svc.DeviceOf(ctx, c)
+	})
+}
+
+func (m *Module) gwChallenge(w http.ResponseWriter, r *http.Request) error {
+	var in struct {
+		Number string `json:"number"`
+	}
+	if err := decode(r, &in); err != nil {
+		return err
+	}
+	return m.withClient(w, r, func(ctx context.Context, c Client) (any, error) {
+		return m.svc.Challenge(ctx, c, in.Number)
+	})
+}
+
+func (m *Module) gwConnect(w http.ResponseWriter, r *http.Request) error {
+	var in ConnectInput
+	if err := decode(r, &in); err != nil {
+		return err
+	}
+	c, err := m.client(r)
+	if err != nil {
+		return apiError(err)
+	}
+	x, err := m.svc.ConnectDevice(r.Context(), c, in)
+	if err != nil {
+		return apiError(err)
+	}
+	httpapi.WriteData(w, r, http.StatusCreated, x)
+	return nil
 }
 
 // GatewayInfo is what the Gateway last reported about itself: the owner

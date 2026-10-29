@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -120,17 +121,20 @@ type NewSession struct {
 	Minutes      int    `json:"minutes"`
 	Clipboard    *bool  `json:"clipboard"`
 	Files        *bool  `json:"files"`
+	// auth: the sealed device password (ConnectDevice only, never JSON).
+	auth *remoteengine.ConnectAuth
 }
 
 // Create starts a session: checks real readiness, policy and limits, then
 // asks the host agent to open it. One Idempotency-Key = one session.
 func (s *Service) Create(ctx context.Context, in NewSession, key string) (Session, error) {
-	return s.create(ctx, in, key, remoteengine.RouteDirect, Caps{Desktop: true, Input: true, Clipboard: true, Files: true, Apps: true})
+	return s.create(ctx, in, key, remoteengine.RouteDirect, Caps{Desktop: true, Input: true, Clipboard: true, Files: true, Apps: true}, nil)
 }
 
 // create is Create for a route; mask narrows the host's effective rights
-// (a remote client's own permissions on the relay route).
-func (s *Service) create(ctx context.Context, in NewSession, key, route string, mask Caps) (Session, error) {
+// (a remote client's own permissions on the relay route). created runs
+// before the host agent learns about the session (ConnectDevice waits).
+func (s *Service) create(ctx context.Context, in NewSession, key, route string, mask Caps, created func(id string)) (Session, error) {
 	if key != "" {
 		var id, entity string
 		err := s.db.QueryRowContext(ctx, `SELECT id, entity_id FROM remote_sessions WHERE idempotency_key = ?`, key).Scan(&id, &entity)
@@ -170,6 +174,15 @@ func (s *Service) create(ctx context.Context, in NewSession, key, route string, 
 	if h.Agent != nil && h.Agent.Backend == "windows-shadow" && route != remoteengine.RouteRelay {
 		return Session{}, &RefusedError{Status: 422, Code: "UNSUPPORTED", Reason: "relay_required", Message: "AER Windows Host доступен через собственный Gateway"}
 	}
+	if _, isDevice := s.deviceByEntity(ctx, in.EntityID); isDevice != (in.auth != nil) {
+		// A device accepts sessions only with its own password, and a password
+		// attempt is meaningful only for a device.
+		return Session{}, &RefusedError{Status: 403, Code: "PERMISSION_REQUIRED", Reason: "device_password",
+			Message: "К компьютеру AER Connect подключаются по его ID и паролю"}
+	}
+	if in.auth != nil && (h.Agent == nil || !slices.Contains(h.Agent.Features, remoteengine.FeatureConnectAuth)) {
+		return Session{}, &RefusedError{Status: 503, Code: "UNAVAILABLE", Reason: "offline", Message: "На компьютере устаревший AER Connect — обновите его"}
+	}
 	if !h.CanConnect {
 		code, reason := "UNAVAILABLE", "not_ready"
 		if h.ActiveSession != nil {
@@ -205,14 +218,21 @@ func (s *Service) create(ctx context.Context, in NewSession, key, route string, 
 	if key != "" {
 		idem = key
 	}
+	authState := ""
+	if in.auth != nil {
+		authState = "required"
+	}
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO remote_sessions (id, entity_id, kind, source_name, source_entity, client_id, transport, state,
-		allowed, idempotency_key, created_at, expires_at, route) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt), route); err != nil {
+		allowed, idempotency_key, created_at, expires_at, route, auth_state) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		x.ID, x.EntityID, x.Kind, x.SourceName, x.SourceEntity, x.ClientID, x.Transport, string(x.State), string(al), idem, ms(now), ms(x.ExpiresAt), route, authState); err != nil {
 		return Session{}, err
+	}
+	if created != nil {
+		created(x.ID)
 	}
 	s.audit(ctx, x.ID, "created", fmt.Sprintf("Запрошен сеанс рабочего стола с «%s» на %d мин", or(x.SourceName, "неизвестного клиента"), minutes))
 	s.mon.RecordEvent(ctx, x.EntityID, "remote_session", monitoring.SeverityInfo, "Запрошен удалённый сеанс с «"+or(x.SourceName, "клиента")+"»")
-	s.enqueue(x.EntityID, Command{ID: ids.New(), Type: "open", SessionID: x.ID, ExpiresAt: x.ExpiresAt, Allowed: allowed, Relay: route == remoteengine.RouteRelay})
+	s.enqueue(x.EntityID, Command{ID: ids.New(), Type: "open", SessionID: x.ID, ExpiresAt: x.ExpiresAt, Allowed: allowed, Relay: route == remoteengine.RouteRelay, Auth: in.auth})
 	return s.Session(ctx, x.ID)
 }
 
@@ -387,8 +407,13 @@ func (s *Service) Hello(ctx context.Context, a monitoring.Agent, info HostInfo) 
 	} else if info.Backend == "gnome-rdp" || info.Backend == "windows-shadow" {
 		v["certPem"] = "Хост GNOME обязан сообщить сертификат для закрепления"
 	}
-	if len(info.Reason) > 300 || len(info.Username) > 64 || len(info.CertPEM) > 16<<10 {
+	if len(info.Reason) > 300 || len(info.Username) > 64 || len(info.CertPEM) > 16<<10 || len(info.Features) > 16 || len(info.Instance) > 128 {
 		v["reason"] = "Слишком длинные поля"
+	}
+	for _, f := range info.Features {
+		if len(f) > 40 {
+			v["features"] = "Названия возможностей до 40 символов"
+		}
 	}
 	if len(v) > 0 {
 		return nil, &ValidationError{Fields: v}
@@ -401,6 +426,7 @@ func (s *Service) Hello(ctx context.Context, a monitoring.Agent, info HostInfo) 
 		a.EntityID, a.ID, string(b), fp, ms(s.now())); err != nil {
 		return nil, err
 	}
+	s.noteHello(ctx, a, info)
 	if prev != nil && prev.certFP != "" && prev.certFP != fp {
 		s.mon.RecordEvent(ctx, a.EntityID, "remote_cert_changed", monitoring.SeverityWarning,
 			"Сертификат удалённого доступа хоста изменился: новые подключения закрепят новый отпечаток")
@@ -472,6 +498,14 @@ func (s *Service) OnAgentEvent(ctx context.Context, a monitoring.Agent, id strin
 	msg := monitoring.Redact(strings.TrimSpace(ev.Message))
 	if len(msg) > 300 {
 		msg = msg[:300]
+	}
+	switch ev.Event {
+	case remoteengine.EventAuthOK, remoteengine.EventAuthFailed:
+		return s.authEvent(ctx, x, ev)
+	case "awaiting_approval", "approved", "ready":
+		if s.authPending(ctx, id) {
+			return x, &RefusedError{Status: 409, Code: "CONFLICT", Reason: "auth_required", Message: "Сначала компьютер должен проверить пароль"}
+		}
 	}
 	switch ev.Event {
 	case "awaiting_approval":
