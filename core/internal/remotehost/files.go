@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,6 +87,16 @@ type FileInfo struct {
 
 // validName allows plain file names only: no paths, no hidden files.
 func validName(n string) bool {
+	stem := strings.ToUpper(strings.TrimRight(strings.SplitN(n, ".", 2)[0], " "))
+	reserved := stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" || stem == "CONIN$" || stem == "CONOUT$"
+	runes := []rune(stem)
+	reserved = reserved || len(runes) == 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) && strings.ContainsRune("123456789¹²³", runes[3])
+	if runtime.GOOS == "windows" && reserved {
+		return false
+	}
+	if runtime.GOOS == "windows" && (!filepath.IsLocal(n) || strings.TrimRight(n, ". ") != n || strings.ContainsAny(n, ":<>\"|?*") || strings.ContainsFunc(n, func(r rune) bool { return r < 32 })) {
+		return false
+	}
 	return n != "" && len(n) <= 200 && utf8.ValidString(n) && !strings.ContainsAny(n, "/\\\x00") &&
 		!strings.HasPrefix(n, ".") && n == filepath.Base(n)
 }
@@ -153,7 +164,17 @@ func (f *FileServer) download(w http.ResponseWriter, r *http.Request, name strin
 		jsonErr(w, http.StatusNotFound, "файл не найден")
 		return
 	}
-	fh, err := os.Open(p)
+	if fi.Size() > f.maxBytes {
+		jsonErr(w, http.StatusRequestEntityTooLarge, "файл больше лимита")
+		return
+	}
+	root, err := os.OpenRoot(f.dir)
+	if err != nil {
+		jsonErr(w, http.StatusInternalServerError, "папка обмена недоступна")
+		return
+	}
+	defer root.Close()
+	fh, err := root.Open(name) // rejects a symlink/junction escape, including a rename race
 	if err != nil {
 		jsonErr(w, http.StatusInternalServerError, "не удалось открыть файл")
 		return
@@ -212,7 +233,13 @@ func (f *FileServer) upload(w http.ResponseWriter, r *http.Request, name string)
 		jsonErr(w, http.StatusUnprocessableEntity, "контрольная сумма не совпала — файл отброшен")
 		return
 	}
-	if err := os.Rename(tmp.Name(), final); err != nil {
+	// Atomic create-if-absent: Rename could overwrite a file created after
+	// the earlier Lstat. The temporary file and target are on one volume.
+	if err := os.Link(tmp.Name(), final); err != nil {
+		if errors.Is(err, os.ErrExist) {
+			jsonErr(w, http.StatusConflict, "файл с таким именем уже есть — не перезаписываем")
+			return
+		}
 		jsonErr(w, http.StatusInternalServerError, "не удалось сохранить файл")
 		return
 	}
